@@ -15,6 +15,15 @@ CREATE TABLE IF NOT EXISTS tickers (
     phonetic TEXT
 );
 
+CREATE TABLE IF NOT EXISTS transcripts (
+    video_id TEXT PRIMARY KEY,
+    raw_text TEXT NOT NULL,
+    corrected_text TEXT,
+    segments TEXT,
+    applied_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- status：
 --   auto         信心足夠，直接套用（人工審核時仍看得到，可退回）
 --   needs_review 有修正建議但信心不足，必須人工確認才算數
