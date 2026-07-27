@@ -9,3 +9,6 @@ backend/*.db
 frontend/node_modules/
 frontend/dist/
 frontend/.angular/
+
+# 音訊、逐字稿、來源資料：可重新產生，且逐字稿不對外散布
+data/
