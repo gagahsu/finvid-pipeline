@@ -22,11 +22,21 @@ SYSTEM_PROMPT = """你是台股財經逐字稿的校對助理。
 逐字稿由語音辨識產生，股票名稱常因發音相近而聽錯（例如「鴻海」被聽成「紅海」）。
 你會收到多筆待判斷項目，每筆包含一個句子、句中的可疑詞，以及模糊比對出的候選股票。
 
+可疑詞是用滑動視窗機械切出來的，很多根本不是完整詞，只是橫跨兩個詞的殘片。
+每筆會附上該句的斷詞結果與「是否對齊詞界」，這是判斷的重要依據。
+
 逐筆判斷該可疑詞是否應替換成某個候選：
 
 - 只有在你有把握該詞確實是在講那支股票時才替換。沒把握就不要改。
+- 對齊詞界=否，通常代表這個可疑詞是切壞的殘片，例如「今天是開始大買」切出
+  「是開」、「說實話是繼續」切出「是繼」、「今天連亞衝上去」切出「天連」。
+  這種一律不要替換。
+- 但對齊詞界=否也可能只是斷詞器不認得誤聽的字（例如「台大電」被切成
+  「台大/電影」）。若該殘片本身就是完整的公司名稱誤寫、且語境明顯在談個股，
+  仍然可以替換。判斷依據是「這個詞在句中是不是一個獨立的指稱對象」。
 - 語境要合理：前後文明顯在談該公司或該產業，才有理由替換。
-- 可疑詞若本身就是正常的一般詞彙（例如「大家」「新高」「經濟」「壓力」），不要替換。
+- 可疑詞若本身就是正常的一般詞彙（例如「大家」「新高」「經濟」「壓力」），
+  或是人名、地名，不要替換。
 - 候選清單只是模糊比對結果，可能全部都是錯的。
 
 輸出格式：只輸出 JSON 物件，不要有任何其他文字或 markdown 標記。
@@ -38,6 +48,15 @@ reason 必須簡短（20 字內）且不可包含雙引號或換行。
 
 class LLMError(RuntimeError):
     pass
+
+
+class RateLimitError(LLMError):
+    """配額用盡。
+
+    OpenRouter 免費層是每日 50 個 request，重置在 UTC 00:00。
+    這跟連線失敗那種暫時性錯誤不同，重試只會更快燒完額度，
+    所以要單獨分類：不重試，並且讓整個 run 直接中止。
+    """
 
 
 def _extract_json(content: str) -> dict:
@@ -84,6 +103,8 @@ def _post_once(messages: list[dict]) -> str:
     except httpx.HTTPError as exc:
         raise LLMError(f"request failed: {exc}") from exc
 
+    if response.status_code == 429:
+        raise RateLimitError(f"OpenRouter 429: {response.text[:300]}")
     if response.status_code != 200:
         raise LLMError(f"OpenRouter {response.status_code}: {response.text[:300]}")
 
@@ -108,6 +129,8 @@ def _post(messages: list[dict], attempts: int = 3) -> str:
     for i in range(attempts):
         try:
             return _post_once(messages)
+        except RateLimitError:
+            raise  # 配額問題，重試只會燒更快
         except LLMError as exc:
             last = exc
             if i < attempts - 1:
@@ -126,9 +149,12 @@ def judge_batch(items: list[dict]) -> dict[int, dict]:
         cands = "、".join(
             f"{c['symbol']} {c['name_zh']}({c['score']:.0f})" for c in item["candidates"]
         )
+        aligned = item.get("aligned")
+        aligned_text = {True: "是", False: "否", None: "無法判定"}[aligned]
         blocks.append(
             f"[{i}] 句子：{item['sentence']}\n"
-            f"    可疑詞：{item['suspect']}\n"
+            f"    斷詞：{item.get('segmented', '')}\n"
+            f"    可疑詞：{item['suspect']}（對齊詞界：{aligned_text}）\n"
             f"    候選：{cands}"
         )
 

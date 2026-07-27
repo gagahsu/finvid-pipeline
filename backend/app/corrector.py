@@ -14,6 +14,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
+import jieba
 from pypinyin import Style, lazy_pinyin
 from rapidfuzz import fuzz
 
@@ -64,6 +65,44 @@ class Suspect:
     segment_index: int
     context: str
     candidates: list[dict] = field(default_factory=list)
+    segmented: str = ""
+    aligned: bool | None = None
+
+
+def segment(sentence: str) -> tuple[str, list[tuple[int, int]]]:
+    """斷詞一次，回傳顯示用字串與各詞的字元範圍。"""
+    words = list(jieba.cut(sentence))
+    spans, pos = [], 0
+    for w in words:
+        spans.append((pos, pos + len(w)))
+        pos += len(w)
+    return "/".join(words), spans
+
+
+def is_aligned(sentence: str, term: str, spans: list[tuple[int, int]]) -> bool | None:
+    """可疑詞的起訖是否落在詞界上。找不到該詞時回 None。"""
+    idx = sentence.find(term)
+    if idx < 0:
+        return None
+    end = idx + len(term)
+    starts_ok = any(s == idx for s, _ in spans)
+    ends_ok = any(e == end for _, e in spans)
+    return starts_ok and ends_ok
+
+
+def boundary_info(sentence: str, term: str) -> tuple[str, bool | None]:
+    """回傳句子的斷詞結果，以及可疑詞是否對齊詞界。
+
+    這是給 LLM 的「訊號」而非過濾器。實測直接拿斷詞當硬過濾會砍掉真陽性
+    （齊鴻被切成「齊鴻鍍/金」、台大電被切成「台大/電影」），因為誤聽形式
+    本來就不在詞庫裡，斷詞器必然切壞。
+
+    但反過來，錯誤裡佔比最高的那類正好是跨詞界的殘片
+    （「今天是開始大買」切出「是開」、「說實話是繼續」切出「是繼」），
+    把斷詞結果附給 LLM，它就有證據可以駁回這類。
+    """
+    segmented, spans = segment(sentence)
+    return segmented, is_aligned(sentence, term, spans)
 
 
 def load_tickers() -> list[Ticker]:
@@ -105,6 +144,8 @@ def detect(segments: list[dict], tickers: list[Ticker]) -> list[Suspect]:
     suspects: list[Suspect] = []
     for idx, seg in enumerate(segments):
         text = seg["text"].strip()
+        segmented: str | None = None
+        spans: list[tuple[int, int]] = []
         for term in _ngrams(text):
             candidates = score_candidates(term, tickers)
             if not candidates:
@@ -112,8 +153,19 @@ def detect(segments: list[dict], tickers: list[Ticker]) -> list[Suspect]:
             # 已經完全命中某支股票 → 本來就對，不需校正
             if candidates[0]["score"] >= EXACT_SCORE and term == candidates[0]["name_zh"]:
                 continue
+            # 同一句只斷詞一次，且只在真的有候選時才斷
+            if segmented is None:
+                segmented, spans = segment(text)
+            aligned = is_aligned(text, term, spans)
             suspects.append(
-                Suspect(text=term, segment_index=idx, context=text, candidates=candidates)
+                Suspect(
+                    text=term,
+                    segment_index=idx,
+                    context=text,
+                    candidates=candidates,
+                    segmented=segmented,
+                    aligned=aligned,
+                )
             )
     return suspects
 
@@ -133,14 +185,18 @@ def judge_and_store(video_id: str, suspects: list[Suspect], sleep: float = 1.0) 
 
     # 每個詞挑最長的 context，資訊量最足
     terms = list(by_term)
-    items = [
-        {
-            "sentence": max(by_term[t], key=lambda s: len(s.context)).context,
-            "suspect": t,
-            "candidates": max(by_term[t], key=lambda s: len(s.context)).candidates,
-        }
-        for t in terms
-    ]
+    items = []
+    for t in terms:
+        rep = max(by_term[t], key=lambda s: len(s.context))
+        items.append(
+            {
+                "sentence": rep.context,
+                "suspect": t,
+                "candidates": rep.candidates,
+                "segmented": rep.segmented,
+                "aligned": rep.aligned,
+            }
+        )
 
     stats = {
         "judged": 0,
@@ -160,6 +216,12 @@ def judge_and_store(video_id: str, suspects: list[Suspect], sleep: float = 1.0) 
 
             try:
                 verdicts = llm.judge_batch(batch)
+            except llm.RateLimitError as exc:
+                # 配額用盡，剩下的批次照樣會失敗，直接中止並保留已判斷的結果
+                print(f"  batch {n}/{total}: 配額用盡，中止。{exc}", flush=True)
+                stats["aborted_at_batch"] = n
+                stats["unjudged"] = len(items) - start
+                return stats
             except llm.LLMError as exc:
                 print(f"  batch {n}/{total}: ERROR {exc}", flush=True)
                 stats["errors"] += len(batch)

@@ -10,6 +10,7 @@ faster-whisper
 # 股票代號校正
 rapidfuzz
 pypinyin
+jieba
 httpx
 
 # 以下尚未使用，是 roadmap 上的階段才會用到，先留著避免日後漏裝：
