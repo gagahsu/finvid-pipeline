@@ -1,6 +1,18 @@
 import json
+import re
 import sqlite3
 from pathlib import Path
+
+# 證交所/櫃買的簡稱帶交易狀態註記：-KY（外國註冊）、-創（創新板）、*（特殊交易）。
+# 這些不會被唸出來，留在 name_zh 只會拉低比對分數，所以剝掉當主要比對名，
+# 原始官方簡稱保留進 aliases。
+# -KY創 要整體優先匹配：拆開會在剝掉 -KY 後留下沒有連字號的「創」，
+# 而裸的「創」不能剝，會誤傷正常股名。
+ANNOTATION = re.compile(r"(-KY創|-KY|-創|-DR|\*)+$")
+
+
+def clean_name(name: str) -> str:
+    return ANNOTATION.sub("", name).strip()
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DB_PATH = Path(__file__).resolve().parent / "finvid.db"
@@ -30,8 +42,12 @@ for row in listed:
     name_en = row.get("英文簡稱", "").strip()
     if not symbol:
         continue
-    aliases = json.dumps([a for a in {name_full, name_short} if a and a != name_short], ensure_ascii=False)
-    rows.append((symbol, "TW", name_short or name_full, name_en, aliases, None))
+    official = name_short or name_full
+    match_name = clean_name(official)
+    aliases = json.dumps(
+        [a for a in {name_full, official} if a and a != match_name], ensure_ascii=False
+    )
+    rows.append((symbol, "TW", match_name, name_en, aliases, None))
 
 for row in otc:
     symbol = row.get("SecuritiesCompanyCode", "").strip()
@@ -40,8 +56,12 @@ for row in otc:
     symbol_en = row.get("Symbol", "").strip()
     if not symbol:
         continue
-    aliases = json.dumps([a for a in {name_full, name_short} if a and a != name_short], ensure_ascii=False)
-    rows.append((symbol, "TW", name_short or name_full, symbol_en or None, aliases, None))
+    official = name_short or name_full
+    match_name = clean_name(official)
+    aliases = json.dumps(
+        [a for a in {name_full, official} if a and a != match_name], ensure_ascii=False
+    )
+    rows.append((symbol, "TW", match_name, symbol_en or None, aliases, None))
 
 cur.executemany(
     "INSERT OR REPLACE INTO tickers (symbol, market, name_zh, name_en, aliases, phonetic) VALUES (?, ?, ?, ?, ?, ?)",

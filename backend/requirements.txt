@@ -1,12 +1,18 @@
+# API
 fastapi
 uvicorn[standard]
-sqlalchemy
-python-dotenv
-httpx
-apscheduler
-yt-dlp
-faster-whisper
-rapidfuzz
-pillow
-playwright
 pydantic-settings
+
+# 下載與轉錄
+pytubefix
+faster-whisper
+
+# 股票代號校正
+rapidfuzz
+pypinyin
+httpx
+
+# 以下尚未使用，是 roadmap 上的階段才會用到，先留著避免日後漏裝：
+# apscheduler  — YouTube RSS 輪詢排程
+# pillow       — IG 圖卡渲染
+# playwright   — HTML 轉截圖（圖卡的另一條路）

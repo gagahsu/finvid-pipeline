@@ -17,8 +17,11 @@ from app.db import connect
 MAX_NAMES = 100
 
 
-def build(channel_videos: list[str] | None = None, min_confidence: float = 0.6) -> str:
+def build(channel_videos: list[str] | None = None) -> str:
     """產生 hotwords 字串。
+
+    只採信心足夠自動套用的（status='auto'）與人工覆核過的紀錄；
+    待確認的 needs_review 誤判率偏高，不拿來餵回轉錄，免得把錯誤放大。
 
     排序依據：人工覆核過的優先，其次出現次數，最後是平均信心度。
     channel_videos 可指定只看某些影片的紀錄（同頻道），None 表示全部。
@@ -30,9 +33,9 @@ def build(channel_videos: list[str] | None = None, min_confidence: float = 0.6) 
                AVG(confidence) AS conf
         FROM corrections
         WHERE corrected IS NOT NULL
-          AND confidence >= ?
+          AND (status = 'auto' OR human_reviewed = 1)
     """
-    params: list = [min_confidence]
+    params: list = []
     if channel_videos:
         placeholders = ",".join("?" * len(channel_videos))
         sql += f" AND video_id IN ({placeholders})"

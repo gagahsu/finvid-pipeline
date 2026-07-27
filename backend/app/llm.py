@@ -62,27 +62,57 @@ def _extract_json(content: str) -> dict:
     raise LLMError(f"model did not return parseable JSON: {content[:200]}")
 
 
-def _post(messages: list[dict]) -> str:
+def _post_once(messages: list[dict]) -> str:
     if not settings.openrouter_api_key:
         raise LLMError("OPENROUTER_API_KEY not set in backend/.env")
 
-    response = httpx.post(
-        API_URL,
-        headers={
-            "Authorization": f"Bearer {settings.openrouter_api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": settings.openrouter_model,
-            "messages": messages,
-            "temperature": 0,
-            "response_format": {"type": "json_object"},
-        },
-        timeout=120,
-    )
+    try:
+        response = httpx.post(
+            API_URL,
+            headers={
+                "Authorization": f"Bearer {settings.openrouter_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": settings.openrouter_model,
+                "messages": messages,
+                "temperature": 0,
+                "response_format": {"type": "json_object"},
+            },
+            timeout=120,
+        )
+    except httpx.HTTPError as exc:
+        raise LLMError(f"request failed: {exc}") from exc
+
     if response.status_code != 200:
         raise LLMError(f"OpenRouter {response.status_code}: {response.text[:300]}")
-    return response.json()["choices"][0]["message"]["content"]
+
+    # 免費層偶爾在 200 之下回非 JSON 的 body（錯誤頁、SSE 片段）。
+    # 這裡一律轉成 LLMError，讓呼叫端能跳過該批而不是整個 run 掛掉。
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise LLMError(f"non-JSON response body: {response.text[:300]}") from exc
+
+    try:
+        return payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise LLMError(f"unexpected response shape: {str(payload)[:300]}") from exc
+
+
+def _post(messages: list[dict], attempts: int = 3) -> str:
+    """帶退避重試。免費層的暫時性失敗很常見，重試一次通常就過。"""
+    import time
+
+    last: LLMError | None = None
+    for i in range(attempts):
+        try:
+            return _post_once(messages)
+        except LLMError as exc:
+            last = exc
+            if i < attempts - 1:
+                time.sleep(2 ** i)
+    raise last  # type: ignore[misc]
 
 
 def judge_batch(items: list[dict]) -> dict[int, dict]:

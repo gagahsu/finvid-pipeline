@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass, field
 
 from pypinyin import Style, lazy_pinyin
-from rapidfuzz import fuzz, process
+from rapidfuzz import fuzz
 
 from app.db import connect
 
@@ -33,6 +33,12 @@ NGRAM_SIZES = (2, 3, 4)
 # 台達電、鴻海）都還在裡面。剩下的誤判交給 LLM 用上下文濾掉。
 SCORE_FLOOR = 90.0
 EXACT_SCORE = 100.0
+
+# 信心分級門檻。實測第一支影片的 25 個替換建議：conf >= 0.9 的 11 個全對，
+# 0.80-0.85 那段 8 個裡有 5 個是誤判（多半是 n-gram 切壞詞界，例如
+# 「就是電池」被切出「是電」）。但那段也有真陽性（國巨、光聖），
+# 所以不能直接丟掉，改成標記待人工確認。
+AUTO_APPLY_CONFIDENCE = 0.90
 
 
 def to_pinyin(text: str) -> str:
@@ -136,7 +142,15 @@ def judge_and_store(video_id: str, suspects: list[Suspect], sleep: float = 1.0) 
         for t in terms
     ]
 
-    stats = {"judged": 0, "replaced": 0, "kept": 0, "missing": 0, "errors": 0}
+    stats = {
+        "judged": 0,
+        "replaced": 0,
+        "kept": 0,
+        "auto": 0,
+        "needs_review": 0,
+        "missing": 0,
+        "errors": 0,
+    }
     with connect() as conn:
         for start in range(0, len(items), llm.BATCH_SIZE):
             batch = items[start : start + llm.BATCH_SIZE]
@@ -161,21 +175,36 @@ def judge_and_store(video_id: str, suspects: list[Suspect], sleep: float = 1.0) 
                 replaced = bool(verdict.get("replace"))
                 stats["replaced" if replaced else "kept"] += 1
 
+                try:
+                    confidence = float(verdict.get("confidence") or 0.0)
+                except (TypeError, ValueError):
+                    confidence = 0.0
+
+                if not replaced:
+                    status = "rejected"
+                elif confidence >= AUTO_APPLY_CONFIDENCE:
+                    status = "auto"
+                    stats["auto"] += 1
+                else:
+                    status = "needs_review"
+                    stats["needs_review"] += 1
+
                 for s in by_term[term]:
                     conn.execute(
                         """INSERT INTO corrections
                            (video_id, segment_index, context, original, corrected,
-                            confidence, candidates, reason)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                            confidence, candidates, reason, status)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             video_id,
                             s.segment_index,
                             s.context,
                             term,
                             verdict.get("name") if replaced else None,
-                            verdict.get("confidence"),
+                            confidence,
                             json.dumps(s.candidates, ensure_ascii=False),
                             verdict.get("reason"),
+                            status,
                         ),
                     )
             conn.commit()
