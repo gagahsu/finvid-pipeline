@@ -26,6 +26,7 @@
 | 前端 | Angular（審核後台） | 熟悉的技術棧，逐字稿 diff 檢視、摘要編輯這類資料密集介面適合 |
 | 後端 API | FastAPI | 跟 Python pipeline 同語言，方便 |
 | YouTube 來源監控 | RSS Feed（見下方），不用 YouTube Data API | 避免配額限制與 API Key 申請 |
+| LLM 判斷（股票代號校正、摘要/文案生成） | OpenRouter 免費 model | 驗證階段先用免費額度,不花錢先驗證準確率,之後有效益再評估換付費 model |
 
 ## YouTube 來源監控
 
@@ -74,7 +75,7 @@ PENDING → DOWNLOADING → TRANSCRIBING → CORRECTING
 
 1. 逐字稿分句，抓可疑片段（數字+英文字母組合、疑似公司名）
 2. 用 `rapidfuzz` 對 `tickers` 表做 fuzzy match，取 top-k 候選
-3. 有候選才丟給 Claude：附上該句 context + 候選清單，讓它判斷是否替換／替換成哪個，
+3. 有候選才丟給 OpenRouter 免費 model：附上該句 context + 候選清單，讓它判斷是否替換／替換成哪個，
    沒把握時明確指示不要亂改
 4. 合併回逐字稿，寫入 `corrections` 表留紀錄
 
