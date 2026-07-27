@@ -1,0 +1,271 @@
+:host {
+  display: block;
+  padding: 0 1rem 3rem;
+}
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.75rem 0 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+}
+
+.vid {
+  color: var(--fg-muted);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.stats {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+
+  b {
+    color: var(--fg);
+  }
+
+  .sep {
+    margin: 0 0.4rem;
+  }
+
+  .pending-stat b {
+    color: var(--warn-fg);
+  }
+}
+
+.warn {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  color: var(--warn-fg);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.filters button {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg);
+  font-size: 0.8rem;
+  cursor: pointer;
+
+  &:not(:first-child) {
+    border-left: 0;
+  }
+
+  &.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+}
+
+.toggle {
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.banner.error {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.state {
+  padding: 2rem 0;
+  color: var(--fg-muted);
+}
+
+.columns-head,
+.diff {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 1fr;
+  gap: 0 1rem;
+}
+
+.columns-head {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0;
+  background: var(--bg-subtle);
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  border-bottom: 1px solid var(--border-faint);
+  padding: 0.3rem 0;
+
+  &.is-changed {
+    background: var(--bg-changed);
+  }
+
+  &.is-pending {
+    background: var(--bg-pending);
+    border-left: 3px solid var(--warn-fg);
+    padding-left: 0.4rem;
+  }
+}
+
+.col-time {
+  display: flex;
+  gap: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+  padding-top: 0.15rem;
+}
+
+.col-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.mk-del {
+  background: var(--del-bg);
+  color: var(--del-fg);
+  text-decoration: line-through;
+}
+
+.mk-ins {
+  background: var(--ins-bg);
+  color: var(--ins-fg);
+  font-weight: 600;
+}
+
+.mk-pending {
+  background: var(--pending-bg);
+  color: var(--warn-fg);
+  border-bottom: 2px dashed var(--warn-fg);
+}
+
+.correction {
+  margin: 0.4rem 0 0.4rem 5.5rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--border);
+  background: var(--bg-subtle);
+  font-size: 0.8rem;
+
+  &.pending {
+    border-left-color: var(--warn-fg);
+  }
+
+  &.reviewed {
+    border-left-color: var(--ok-fg);
+  }
+}
+
+.c-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.term {
+  font-size: 0.9rem;
+
+  .arrow {
+    margin: 0 0.35rem;
+    color: var(--fg-muted);
+  }
+}
+
+.status,
+.conf {
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+}
+
+.reason,
+.candidates,
+.context {
+  margin-top: 0.25rem;
+  color: var(--fg-muted);
+  font-size: 0.76rem;
+}
+
+.cand {
+  margin-right: 0.6rem;
+
+  b {
+    font-family: var(--mono);
+    color: var(--fg);
+  }
+
+  i {
+    font-style: normal;
+    opacity: 0.7;
+  }
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+
+  button {
+    padding: 0.2rem 0.7rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 0.78rem;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+
+  .accept:not(:disabled) {
+    border-color: var(--ok-fg);
+    color: var(--ok-fg);
+  }
+
+  .reject:not(:disabled) {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+}
+
+.applied-flag {
+  margin-left: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--ok-fg);
+
+  &.off {
+    color: var(--fg-muted);
+  }
+}

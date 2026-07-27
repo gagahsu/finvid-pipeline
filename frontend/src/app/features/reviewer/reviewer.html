@@ -1,0 +1,170 @@
+<header class="head">
+  <div class="head-main">
+    <a routerLink="/" class="back">← 影片清單</a>
+    <h1>{{ transcript()?.title || videoId() }}</h1>
+    <span class="vid">{{ videoId() }}</span>
+  </div>
+
+  @if (transcript(); as t) {
+    <div class="stats">
+      <span><b>{{ t.segments.length }}</b> segments</span>
+      <span class="sep">·</span>
+      <span>建議 <b>{{ stats().total }}</b></span>
+      <span class="sep">·</span>
+      <span class="pending-stat">待審 <b>{{ stats().pending }}</b></span>
+      <span class="sep">·</span>
+      <span>將套用 <b>{{ stats().applied }}</b></span>
+      <span class="sep">·</span>
+      <span>人工已判定 <b>{{ stats().reviewed }}</b></span>
+      <span class="sep">·</span>
+      <span class="muted">LLM 排除 {{ stats().excluded }}</span>
+    </div>
+
+    @if (!t.raw_exact) {
+      <p class="warn">
+        原始逐字稿是由校正紀錄反推還原的，與 raw_text 不完全吻合，左欄內容僅供參考。
+      </p>
+    }
+  }
+
+  <div class="toolbar">
+    <div class="filters" role="group" aria-label="篩選">
+      <button
+        type="button"
+        [class.active]="filter() === 'pending'"
+        (click)="setFilter('pending')"
+      >
+        待人工確認 ({{ stats().pending }})
+      </button>
+      <button
+        type="button"
+        [class.active]="filter() === 'changed'"
+        (click)="setFilter('changed')"
+      >
+        有修正建議
+      </button>
+      <button type="button" [class.active]="filter() === 'all'" (click)="setFilter('all')">
+        全文
+      </button>
+    </div>
+
+    <label class="toggle">
+      <input type="checkbox" [checked]="showExcluded()" (change)="toggleExcluded()" />
+      顯示 LLM 已排除的建議（稽核用）
+    </label>
+  </div>
+
+  <div class="columns-head">
+    <span class="col-time"></span>
+    <span class="col-text">原始逐字稿</span>
+    <span class="col-text">校正後</span>
+  </div>
+</header>
+
+@if (error(); as e) {
+  <p class="banner error">
+    {{ e }}
+    <button type="button" (click)="dismissError()">關閉</button>
+  </p>
+}
+
+@if (loading()) {
+  <p class="state">載入中…</p>
+} @else if (rows().length === 0) {
+  <p class="state">這個篩選條件下沒有內容。</p>
+} @else {
+  <ol class="rows">
+    @for (row of rows(); track row.index) {
+      <li class="row" [class.is-pending]="row.pending" [class.is-changed]="row.changed">
+        <div class="diff">
+          <span class="col-time">
+            <span class="time">{{ row.time }}</span>
+            <span class="idx">#{{ row.index }}</span>
+          </span>
+          <p class="col-text raw">
+            @for (p of row.rawParts; track $index) {
+              <span [class]="'mk-' + p.kind">{{ p.text }}</span>
+            }
+          </p>
+          <p class="col-text corrected">
+            @for (p of row.correctedParts; track $index) {
+              <span [class]="'mk-' + p.kind">{{ p.text }}</span>
+            }
+          </p>
+        </div>
+
+        @for (c of row.corrections; track c.id) {
+          <div
+            class="correction"
+            [class.pending]="c.status === 'needs_review' && !c.human_reviewed"
+            [class.reviewed]="c.human_reviewed"
+          >
+            <div class="c-main">
+              <span class="term">
+                <span class="mk-del">{{ c.original }}</span>
+                <span class="arrow">→</span>
+                <span class="mk-ins">{{ c.corrected || '（不替換）' }}</span>
+              </span>
+              <span class="status">{{ statusLabel(c) }}</span>
+              <span class="conf">信心 {{ confidencePercent(c) }}</span>
+            </div>
+
+            @if (c.reason) {
+              <div class="reason">LLM 理由：{{ c.reason }}</div>
+            }
+
+            @if (c.candidates.length) {
+              <div class="candidates">
+                候選：
+                @for (cand of c.candidates; track cand.symbol) {
+                  <span class="cand">
+                    <b>{{ cand.symbol }}</b> {{ cand.name_zh }}
+                    <i>{{ cand.score !== null ? (cand.score | number: '1.0-1') : '' }}</i>
+                  </span>
+                }
+              </div>
+            }
+
+            @if (c.context) {
+              <div class="context">原句：{{ c.context }}</div>
+            }
+
+            <div class="actions">
+              <button
+                type="button"
+                class="accept"
+                [disabled]="busyId() === c.id || !c.corrected"
+                (click)="review(c, 'accept')"
+              >
+                接受
+              </button>
+              <button
+                type="button"
+                class="reject"
+                [disabled]="busyId() === c.id"
+                (click)="review(c, 'reject')"
+              >
+                還原
+              </button>
+              @if (c.human_reviewed) {
+                <button
+                  type="button"
+                  class="reset"
+                  [disabled]="busyId() === c.id"
+                  (click)="review(c, 'reset')"
+                >
+                  取消判定
+                </button>
+              }
+              @if (c.applied) {
+                <span class="applied-flag">會套用進逐字稿</span>
+              } @else {
+                <span class="applied-flag off">不套用</span>
+              }
+            </div>
+          </div>
+        }
+      </li>
+    }
+  </ol>
+}

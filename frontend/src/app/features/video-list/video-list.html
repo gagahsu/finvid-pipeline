@@ -1,0 +1,56 @@
+<header class="page-head">
+  <h1>逐字稿審核</h1>
+  <p class="hint">
+    校正模組的建議準確率還不足以全自動化，發布前每一筆修正都要人看過。
+  </p>
+</header>
+
+@if (loading()) {
+  <p class="state">載入中…</p>
+} @else if (error()) {
+  <p class="state error">{{ error() }}</p>
+} @else if (videos().length === 0) {
+  <p class="state">還沒有任何逐字稿。先跑 pipeline 產出資料。</p>
+} @else {
+  <table class="videos">
+    <thead>
+      <tr>
+        <th>影片</th>
+        <th class="num">segments</th>
+        <th class="num">待審</th>
+        <th class="num" title="上次 pipeline 產生 corrected_text 時實際套用的筆數">
+          上次套用
+        </th>
+        <th class="num">LLM 排除</th>
+        <th class="num">總建議</th>
+        <th>更新時間</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (v of videos(); track v.video_id) {
+        <tr>
+          <td>
+            <a [routerLink]="['/review', v.video_id]" class="video-link">
+              {{ v.title || v.video_id }}
+            </a>
+            @if (v.title) {
+              <span class="vid">{{ v.video_id }}</span>
+            }
+          </td>
+          <td class="num">{{ v.segment_count }}</td>
+          <td class="num">
+            @if (v.pending_count > 0) {
+              <span class="badge pending">{{ v.pending_count }}</span>
+            } @else {
+              <span class="badge done">0</span>
+            }
+          </td>
+          <td class="num">{{ v.applied_count }}</td>
+          <td class="num muted">{{ v.rejected_count }}</td>
+          <td class="num muted">{{ v.total_corrections }}</td>
+          <td class="muted">{{ v.updated_at }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

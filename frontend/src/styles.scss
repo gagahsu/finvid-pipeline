@@ -1,1 +1,50 @@
-/* You can add global styles to this file, and also import other style files */
+/* 全域樣式與設計 token。審核介面是資料密集型，優先易讀與資訊密度。 */
+
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f5f6f8;
+  --bg-changed: #fffdf5;
+  --bg-pending: #fff8e6;
+  --fg: #1c1f23;
+  --fg-muted: #6b7280;
+  --border: #d5d9df;
+  --border-faint: #ebedf0;
+  --accent: #2563eb;
+  --ok-fg: #15803d;
+  --warn-fg: #b45309;
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+  --del-bg: #fde2e2;
+  --del-fg: #991b1b;
+  --ins-bg: #d7f5df;
+  --ins-fg: #14532d;
+  --pending-bg: #fdeec2;
+  --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Segoe UI", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

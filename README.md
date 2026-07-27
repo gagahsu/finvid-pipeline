@@ -74,6 +74,9 @@ npm start
 
 開發伺服器：http://localhost:4200
 
+審核後台的資料來自 backend，`/api` 由 `proxy.conf.json` 轉到 http://127.0.0.1:8000，
+所以要先把上面的 uvicorn 跑起來，畫面才有東西。
+
 ## 初始化資料
 
 ### 建立股票代號字典
@@ -123,8 +126,16 @@ backend/
   app/
     main.py          FastAPI 進入點
     config.py        環境變數設定（pydantic-settings）
+    db.py            SQLite schema 與遷移
+    pipeline.py      狀態機與 job 記錄
+    cli.py           pipeline CLI 入口
     downloader.py    YouTube 音訊下載
     transcriber.py   faster-whisper 語音轉錄
+    corrector.py     股票代號偵測與校正判斷
+    llm.py           OpenRouter client
+    applier.py       把 corrections 套回逐字稿
+    hotwords.py      從累積修正產生 Whisper hotwords
+    api/             審核後台的 REST 端點
   build_tickers.py   建立股票代號字典
   requirements.txt
   finvid.db          SQLite（不進版控）
@@ -156,9 +167,28 @@ console 只輸出進度數字。
 - [x] YouTube 音訊下載
 - [x] faster-whisper 本機轉錄
 - [x] 股票代號字典（台股上市櫃）
-- [ ] **股票代號校正模組**（rapidfuzz + OpenRouter）← 最高風險，優先驗證
-- [ ] CLI 跑通完整 pipeline
-- [ ] SQLite 狀態管理
-- [ ] Angular 審核後台
+- [x] 股票代號校正模組（rapidfuzz + OpenRouter）
+- [x] 校正結果套回逐字稿（corrected_text）
+- [x] CLI 跑通 pipeline（下載 → 轉錄 → 校正 → 套用）
+- [x] SQLite 狀態管理（狀態機 + jobs）
+- [x] Angular 審核後台
+- [ ] 摘要與社群文案生成（SUMMARIZING）
 - [ ] IG 圖卡渲染與發文
 - [ ] YouTube RSS 輪詢
+
+### 校正準確率尚未有可信結論
+
+CLAUDE.md 把「股票代號校正準確率」列為專案能否成立的關鍵，目前**還沒驗證完成**。
+
+已跑過的幾輪，每次都是人工看少量樣本判讀，三輪得到三個不同數字，
+而且改動之間互相干擾（修字典、加信心分級、加斷詞訊號），無法歸因。
+recall 則完全沒測——只知道抓到的對不對，不知道漏了多少。
+
+已知仍存在的誤判類型：
+
+- n-gram 切壞詞界：「今天是開始大買」切出「是開」誤判成士開
+- 一般詞彙誤判：「漲價概念股」被改成「長佳概念股」
+
+下一步應該先建**固定的人工標註答案集**，之後每次調整才能算出明確的
+precision / recall，不必再靠肉眼比對。這也是省 API 配額的作法
+（OpenRouter 免費層每日 50 個 request，跑完一支影片要 18 個）。

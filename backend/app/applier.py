@@ -14,7 +14,13 @@ from pathlib import Path
 
 from app.db import connect
 
-APPLICABLE = "status = 'auto' OR human_reviewed = 1"
+# 只套用 status='auto'：LLM 信心足夠自動通過，或人工按下接受（審核 API 會把
+# 狀態改成 auto）。
+#
+# 不能寫成「status='auto' OR human_reviewed=1」：人工「還原」一筆修正會留下
+# status='rejected' 加 human_reviewed=1，用 human_reviewed 判斷會把人明確否決
+# 掉的修正照樣套回逐字稿，等於繞過審核閘門。
+APPLICABLE = "status = 'auto'"
 
 
 def load_applicable(video_id: str) -> dict[int, list[tuple[str, str]]]:
