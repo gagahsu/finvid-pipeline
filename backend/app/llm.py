@@ -82,9 +82,17 @@ def _extract_json(content: str) -> dict:
     raise LLMError(f"model did not return parseable JSON: {content[:200]}")
 
 
-def _post_once(messages: list[dict]) -> str:
+def _post_once(messages: list[dict], json_mode: bool = True) -> str:
     if not settings.openrouter_api_key:
         raise LLMError("OPENROUTER_API_KEY not set in backend/.env")
+
+    body: dict = {
+        "model": settings.openrouter_model,
+        "messages": messages,
+        "temperature": 0,
+    }
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
 
     try:
         response = httpx.post(
@@ -93,13 +101,8 @@ def _post_once(messages: list[dict]) -> str:
                 "Authorization": f"Bearer {settings.openrouter_api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": settings.openrouter_model,
-                "messages": messages,
-                "temperature": 0,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=120,
+            json=body,
+            timeout=180,
         )
     except httpx.HTTPError as exc:
         raise LLMError(f"request failed: {exc}") from exc
@@ -122,14 +125,22 @@ def _post_once(messages: list[dict]) -> str:
         raise LLMError(f"unexpected response shape: {str(payload)[:300]}") from exc
 
 
-def _post(messages: list[dict], attempts: int = 3) -> str:
+def complete(system: str, user: str, json_mode: bool = True) -> str:
+    """單次自由生成。摘要與文案用這支，判斷題走 judge_batch。"""
+    return _post(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        json_mode=json_mode,
+    )
+
+
+def _post(messages: list[dict], attempts: int = 3, json_mode: bool = True) -> str:
     """帶退避重試。免費層的暫時性失敗很常見，重試一次通常就過。"""
     import time
 
     last: LLMError | None = None
     for i in range(attempts):
         try:
-            return _post_once(messages)
+            return _post_once(messages, json_mode=json_mode)
         except RateLimitError:
             raise  # 配額問題，重試只會燒更快
         except LLMError as exc:

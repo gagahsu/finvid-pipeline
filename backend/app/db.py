@@ -90,6 +90,55 @@ CREATE TABLE IF NOT EXISTS corrections (
 );
 
 CREATE INDEX IF NOT EXISTS idx_corrections_video ON corrections(video_id);
+
+-- 一支影片可以有多個版本的摘要：重跑摘要階段、或人工在審核台改完想留底，
+-- 都是新增一列而非覆寫。version 由寫入端取「目前最大值 + 1」。
+--
+-- content 是給 Vocus/Medium 用的 Markdown 草稿，ig_caption 是 IG 貼文文案，
+-- 兩者長度與語氣差很多，所以分欄存而不是共用一份。
+CREATE TABLE IF NOT EXISTS summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    title TEXT,
+    content TEXT NOT NULL,
+    ig_caption TEXT,
+    model TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(video_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_summaries_video ON summaries(video_id);
+
+-- IG 圖卡等產出的檔案。file_path 存相對於專案根目錄的路徑，
+-- 圖檔本身不進 DB 也不進版控。
+CREATE TABLE IF NOT EXISTS media_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    summary_id INTEGER NOT NULL REFERENCES summaries(id),
+    file_path TEXT NOT NULL,
+    type TEXT NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_summary ON media_assets(summary_id);
+
+-- 各平台的發布狀態。Vocus/Medium 沒有可用的發文 API，走「產出草稿、人工貼上」，
+-- 所以它們的 status 會停在 draft，external_url 由人工回填。
+CREATE TABLE IF NOT EXISTS posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    summary_id INTEGER NOT NULL REFERENCES summaries(id),
+    platform TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    external_url TEXT,
+    published_at TEXT,
+    error TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(summary_id, platform)
+);
+
+CREATE INDEX IF NOT EXISTS idx_posts_summary ON posts(summary_id);
 """
 
 

@@ -57,6 +57,7 @@ STAGE_STATUS = {
     "transcribe": TRANSCRIBING,
     "correct": CORRECTING,
     "apply": CORRECTING,
+    "summarize": SUMMARIZING,
 }
 
 

@@ -119,6 +119,36 @@ python -m app.transcriber ../data/audio/VIDEO_ID.m4a
 輸出同目錄的 `VIDEO_ID.json`，包含完整逐字稿與帶時間軸的 segments。
 進度寫在 stderr，可即時觀察。
 
+### 跑完整條 pipeline
+
+```bash
+python -m app.cli run "https://www.youtube.com/watch?v=VIDEO_ID"
+python -m app.cli status VIDEO_ID
+```
+
+依序跑 download → transcribe → correct → apply → summarize，最後停在 `REVIEW`。
+`REVIEW` 之後的 RENDERING / PUBLISHING 一律要人在審核台按下去才會走，CLI 不會自己往下跑。
+
+會花 OpenRouter 配額的是 `correct`（約 18 個 request）與 `summarize`（1 個）。
+`--skip-judge` 只跳過 correct 那段。
+
+### 產出摘要草稿
+
+```bash
+python -m app.summarizer VIDEO_ID
+```
+
+寫入 `summaries` 表（同一支影片可有多版，version 自動遞增），
+並輸出 `data/drafts/VIDEO_ID_v<n>.md` 供人工複製貼上到 Vocus / Medium。
+
+草稿的來源連結與免責聲明由程式補上，不交給 model —— 這兩項少一個就是合規問題，
+而 model 漏掉指示是常態。
+
+**逐字稿不會被對外發布**：CLAUDE.md 規定只能發布重新整理過的摘要。
+prompt 有交代不可照抄，但 prompt 是請求不是保證，所以產出後另外用
+`check_verbatim()` 掃描 —— 與逐字稿有連續 20 字以上重疊就讓這階段失敗，
+不會靜靜寫進 DB。比對前會先去掉標點，否則加個逗號就能繞過。
+
 ## 目錄結構
 
 ```
@@ -172,8 +202,10 @@ console 只輸出進度數字。
 - [x] CLI 跑通 pipeline（下載 → 轉錄 → 校正 → 套用）
 - [x] SQLite 狀態管理（狀態機 + jobs）
 - [x] Angular 審核後台
-- [ ] 摘要與社群文案生成（SUMMARIZING）
-- [ ] IG 圖卡渲染與發文
+- [x] 摘要與社群文案生成（SUMMARIZING）+ Markdown 草稿輸出
+- [ ] 審核後台顯示／編輯摘要（目前只有逐字稿校正的介面）
+- [ ] IG 圖卡渲染（media_assets 表已備，還沒有產生圖的程式）
+- [ ] Instagram Graph API 發文（posts 表已備，狀態停在 draft）
 - [ ] YouTube RSS 輪詢
 
 ### 校正準確率
@@ -217,8 +249,19 @@ v3 只跑難題子集 `subset_hard.txt`，其 precision 是上界。）
 **3. 兩個 prompt 的共識比 confidence 可靠。** 取交集 precision 87.5%，
 唯一的誤判是「擊太→基泰」。代價是每支影片要跑兩輪（36 個 request）。
 
+**4. 誤判會一路流進對外草稿。** 第一份摘要草稿裡出現「長佳概念股」——
+影片講的是「漲價概念股」，長佳（4550）是精神科醫材公司，影片從沒提到它。
+來源就是那筆 confidence 0.9、`status='auto'`、沒經人看過的修正：
+它被自動套進 `corrected_text`，摘要階段照單全收，於是一家真實上市公司
+被寫進了準備對外發布的內容裡。
+
+人工閘門仍然攔得住（狀態停在 REVIEW），但這條鏈已經完整跑過一次，
+說明 `AUTO_APPLY_CONFIDENCE` 不該繼續當作自動套用的依據。
+
 仍待處理：
 
+- **自動套用的閘門要換掉**：改用雙 prompt 共識，或乾脆先關掉自動套用、
+  全部進人工審核。目前 `AUTO_APPLY_CONFIDENCE = 0.90` 擋不住任何東西。
 - 只測過一支影片。要下結論得再標 2-3 支，尤其是不同主持人的口音。
 - ETF 不在字典裡，「00981A」這類代號目前完全抓不到（recall 沒涵蓋這塊）。
 - 真陰性的 precision 只在難題子集上量過，整份逐字稿的實際誤判率會更低

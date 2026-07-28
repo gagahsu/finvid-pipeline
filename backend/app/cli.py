@@ -1,7 +1,10 @@
 """Pipeline CLI 入口。
 
-依序驅動 download -> transcribe -> correct -> apply，每個階段更新 videos.status
-並在 jobs 留下紀錄。
+依序驅動 download -> transcribe -> correct -> apply -> summarize，
+每個階段更新 videos.status 並在 jobs 留下紀錄，最後停在 REVIEW 等人工審核。
+
+會用到 OpenRouter 配額的是 correct（約 18 個 request）與 summarize（1 個）。
+--skip-judge 只跳過 correct 那段。
 
 用法：
 
@@ -27,7 +30,7 @@ from app.db import init_schema
 
 DEFAULT_AUDIO_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "audio"
 
-STAGES = ["download", "transcribe", "correct", "apply"]
+STAGES = ["download", "transcribe", "correct", "apply", "summarize"]
 
 # 取 YouTube video_id：watch?v=、youtu.be/、/shorts/ 三種形式
 _ID_PATTERNS = [
@@ -106,6 +109,12 @@ def _stage_apply(video_id: str, audio_dir: Path) -> dict:
     return apply_to_transcript(video_id, _load_transcript(video_id, audio_dir))
 
 
+def _stage_summarize(video_id: str) -> dict:
+    from app.summarizer import summarize
+
+    return summarize(video_id)
+
+
 def _load_transcript(video_id: str, audio_dir: Path) -> dict:
     path = audio_dir / f"{video_id}.json"
     if not path.exists():
@@ -150,8 +159,10 @@ def cmd_run(args) -> int:
                     out = str(_stage_transcribe(video_id, audio_dir))
                 elif stage == "correct":
                     out = _stage_correct(video_id, audio_dir, args.skip_judge)
-                else:
+                elif stage == "apply":
                     out = _stage_apply(video_id, audio_dir)
+                else:
+                    out = _stage_summarize(video_id)
             report[stage] = out
             print(f"{stage}: ok", flush=True)
         except Exception as exc:
@@ -161,8 +172,11 @@ def cmd_run(args) -> int:
             print(f"status: {pipeline.get_status(video_id)}", flush=True)
             return 1
 
+    # 全部階段跑完就推進到 REVIEW，pipeline 在此停下等人。
+    # REVIEW 之後的 RENDERING / PUBLISHING 一律由人在審核台按下去才會走，
+    # CLI 不會自己往下跑 —— 那是唯一的人工閘門，不能被批次執行繞過。
+    pipeline.advance(video_id, pipeline.REVIEW)
     print(f"status: {pipeline.get_status(video_id)}", flush=True)
-    # 下一站是 SUMMARIZING，摘要模組還沒實作，所以停在 CORRECTING 不往前推。
     _write_report(args.report, report)
     return 0
 
