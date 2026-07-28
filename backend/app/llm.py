@@ -73,16 +73,53 @@ def _extract_json(content: str) -> dict:
         return json.loads(content)
     except json.JSONDecodeError:
         pass
-    match = re.search(r"\{.*\}", content, re.DOTALL)
-    if match:
+    for candidate in _brace_spans(content):
         try:
-            return json.loads(match.group())
+            return json.loads(candidate)
         except json.JSONDecodeError:
-            pass
+            continue
     raise LLMError(f"model did not return parseable JSON: {content[:200]}")
 
 
-def _post_once(messages: list[dict], json_mode: bool = True) -> str:
+def _brace_spans(content: str) -> list[str]:
+    """抽出內容中所有成對的大括號區塊，長的排前面。
+
+    有些 model（例如 nemotron 系列）會先輸出一段推理文字才給 JSON，而那段
+    文字本身也可能帶大括號。用 `\\{.*\\}` 貪婪比對會把推理與 JSON 連在一起
+    變成無效字串，所以改成掃描配對 —— 字串內的括號與跳脫字元要跳過，
+    否則 reason 欄位裡一個 "}" 就會提早收尾。
+    """
+    spans: list[str] = []
+    depth = 0
+    start = -1
+    in_string = False
+    escaped = False
+    for i, ch in enumerate(content):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0:
+                    spans.append(content[start : i + 1])
+    return sorted(spans, key=len, reverse=True)
+
+
+def _post_once(
+    messages: list[dict], json_mode: bool = True, max_tokens: int | None = None
+) -> str:
     if not settings.openrouter_api_key:
         raise LLMError("OPENROUTER_API_KEY not set in backend/.env")
 
@@ -91,6 +128,10 @@ def _post_once(messages: list[dict], json_mode: bool = True) -> str:
         "messages": messages,
         "temperature": 0,
     }
+    # 摘要要產出上千字的正文加 IG 文案，不指定上限時各家 model 的預設值差很多，
+    # 被截斷的 JSON 連解析都過不了。判斷題輸出短，維持不指定。
+    if max_tokens:
+        body["max_tokens"] = max_tokens
     if json_mode:
         body["response_format"] = {"type": "json_object"}
 
@@ -125,22 +166,51 @@ def _post_once(messages: list[dict], json_mode: bool = True) -> str:
         raise LLMError(f"unexpected response shape: {str(payload)[:300]}") from exc
 
 
-def complete(system: str, user: str, json_mode: bool = True) -> str:
+def complete(
+    system: str, user: str, json_mode: bool = True, max_tokens: int | None = None
+) -> str:
     """單次自由生成。摘要與文案用這支，判斷題走 judge_batch。"""
     return _post(
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
         json_mode=json_mode,
+        max_tokens=max_tokens,
     )
 
 
-def _post(messages: list[dict], attempts: int = 3, json_mode: bool = True) -> str:
+def complete_json(
+    system: str, user: str, max_tokens: int | None = None, attempts: int = 3
+) -> dict:
+    """自由生成並解析成 JSON，解析失敗就重試。
+
+    _post 只在 HTTP 層失敗時重試，但免費 model 還有另一種失敗：連線正常、
+    回應是 200，內容卻是一段推理文字或被截斷的 JSON。這種情況換一次就好了，
+    沒必要讓整個階段掛掉重跑（下載與轉錄都得重來）。
+
+    RateLimitError 不重試 —— 配額問題重試只會燒更快。
+    """
+    last: LLMError | None = None
+    for _ in range(attempts):
+        raw = complete(system, user, max_tokens=max_tokens)
+        try:
+            return _extract_json(raw)
+        except LLMError as exc:
+            last = exc
+    raise last  # type: ignore[misc]
+
+
+def _post(
+    messages: list[dict],
+    attempts: int = 3,
+    json_mode: bool = True,
+    max_tokens: int | None = None,
+) -> str:
     """帶退避重試。免費層的暫時性失敗很常見，重試一次通常就過。"""
     import time
 
     last: LLMError | None = None
     for i in range(attempts):
         try:
-            return _post_once(messages, json_mode=json_mode)
+            return _post_once(messages, json_mode=json_mode, max_tokens=max_tokens)
         except RateLimitError:
             raise  # 配額問題，重試只會燒更快
         except LLMError as exc:

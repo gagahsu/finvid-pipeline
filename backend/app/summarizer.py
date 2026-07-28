@@ -25,13 +25,18 @@ from app.db import connect
 # 會重複出現「台積電法說會」這種詞組，那是事實陳述不是抄寫。超過就代表整句搬運。
 MAX_VERBATIM = 20
 
+# 輸出 token 上限。正文一千二到兩千字加上 IG 文案與 JSON 結構，中文一字約
+# 一到兩個 token，抓 8000 才不會在 stocks 陣列中途被切斷 —— JSON 被截斷等於
+# 整個階段白跑，寧可給寬一點。
+MAX_OUTPUT_TOKENS = 8000
+
 DISCLAIMER = (
     "本文為 YouTube 影片內容的重點整理，不代表本人立場，"
     "亦不構成任何投資建議。投資有風險，請自行判斷並承擔決策結果。"
 )
 
-SYSTEM_PROMPT = """你是財經內容編輯。你會收到一支台股財經影片的逐字稿，
-要把它整理成可以獨立閱讀的重點文章與社群貼文。
+SYSTEM_PROMPT = """你是財經內容編輯。你會收到一支台股財經節目的逐字稿，
+要把它整理成一篇資訊密度高、可以獨立閱讀的重點文章與社群貼文。
 
 最重要的規則：**不可以照抄逐字稿**。
 
@@ -39,28 +44,59 @@ SYSTEM_PROMPT = """你是財經內容編輯。你會收到一支台股財經影�
 然後用自己的話重新寫一遍。任何超過二十個字的連續片段都不可以跟原文相同。
 這不是風格建議，是著作權界線。
 
-內容要求：
+## 這種節目在講什麼
 
-- 抓出影片真正談到的重點，通常是三到六個。不要為了湊數硬編。
-- 有提到具體個股就寫出公司名與代號；沒提到就不要自己補。
-- 保留說話者的判斷與理由，但要標明那是影片觀點，不是既成事實。
+台股財經節目通常照這個順序走：先講當天盤勢，再帶到影響盤勢的總經與國際
+消息，然後分析產業族群，最後由來賓逐檔講個股看法與操作方式。
+你的整理要把這四塊都抓出來，而不是只寫幾句籠統的心得。
+
+**節目講到的具體內容才是價值所在**：指數點位、成交量、外資買賣超金額、
+法人籌碼、殖利率、油價匯率數字、個股價位與均線位置、來賓說的進出場條件。
+這些數字與條件務必保留下來，這是讀者真正想看的東西。
+反過來說，「市場情緒不佳」「要留意風險」這種空話沒有資訊量，不要寫。
+
+## 文章結構（article）
+
+用二級標題分節，只寫節目真的有談到的部分，沒談到的整節略過，不要硬湊：
+
+- `## 盤勢` — 指數走勢與點位、成交量能、技術面位置（均線、支撐壓力、缺口）、
+  三大法人買賣超與籌碼變化、內外資或散戶動向。
+- `## 總經與國際情勢` — 利率與央行動向、油價、匯率、通膨數據、地緣政治、
+  美股與其他主要市場的表現，以及節目認為它們如何影響台股。
+- `## 產業與族群` — 節目談到的族群輪動、產業供需、法說會與訂單能見度。
+- `## 個股觀察` — **逐檔獨立成段**，每檔至少三到五句，格式如下：
+  `### 台積電（2330）` 然後寫節目對這檔的看法、理由、以及提到的
+  觀察價位或操作方式（例如站上哪條均線、跌破什麼價位要減碼、
+  哪個區間是箱型整理）。有幾檔就寫幾檔，不要合併成一段流水帳。
+- `## 操作策略與風險` — 節目給的部位配置、進出場紀律、以及它自己點出的風險。
+
+篇幅：正文一千二到兩千字。節目內容豐富就寫足，內容真的少就照實少寫，
+但不可以為了湊字數把同一件事換句話說講兩遍。
+
+## 其他要求
+
+- 保留說話者的判斷與理由，但要標明那是節目觀點而非既成事實
+  （「來賓認為⋯⋯」「節目提到⋯⋯」）。
+- 不要寫成投資建議的語氣（「快買」「必漲」）。轉述操作方法時也一樣，
+  寫「來賓的操作條件是跌破月線先減碼」，不要寫「你應該跌破月線減碼」。
 - 逐字稿是語音辨識產生的，可能還有錯字。看不懂的段落直接略過，
-  不要猜測後當成事實寫出來。
-- 不要寫成投資建議的語氣（「快買」「必漲」），改成描述立場
-  （「影片認為⋯⋯」「主持人看法是⋯⋯」）。
+  不要猜測後當成事實寫出來。個股代號若與名稱明顯不符，以名稱為準。
+- 不要自己加文章標題列、免責聲明或來源連結，那些由程式補上。
 
-兩份產出的差別：
+## IG 文案（ig_caption）
 
-- article：Markdown 格式的文章正文，用二級標題分段，每段兩到四句話。
-  不要自己加標題列、免責聲明或來源連結，那些由程式補上。
-- ig_caption：IG 貼文文案，兩百到四百字，開頭一句話要能讓人停下來滑，
-  接著條列重點，語氣口語但不浮誇。結尾不要加 hashtag，由程式補上。
+四百到八百字。開頭一句話要能讓人停下來滑，接著用條列帶出盤勢、總經、
+個股三塊的具體重點（一樣要有數字與價位，不要只寫結論）。
+語氣口語但不浮誇。結尾不要加 hashtag，由程式補上。
 
-輸出格式：只輸出 JSON 物件，不要有任何其他文字或 markdown 標記。
-{"title": "文章標題", "points": ["重點一", "重點二"], "tickers": [{"symbol": "2330", "name": "台積電"}], "article": "Markdown 正文", "ig_caption": "IG 文案"}
+## 輸出格式
 
-title 二十字以內。points 每則二十五字以內，是給圖卡用的短句。
-tickers 只放影片明確談到的個股，沒有就給空陣列。"""
+只輸出 JSON 物件，不要有任何其他文字或 markdown 標記。
+{"title": "文章標題", "points": ["重點一", "重點二"], "tickers": [{"symbol": "2330", "name": "台積電"}], "stocks": [{"symbol": "2330", "name": "台積電", "view": "節目對這檔的看法與理由", "action": "提到的觀察價位或操作方式，沒提到就給空字串"}], "article": "Markdown 正文", "ig_caption": "IG 文案"}
+
+title 二十字以內。points 六到十則、每則二十五字以內，是給 IG 圖卡用的短句，
+要挑最具體的（含數字或價位那種），不要放空泛結論。
+tickers 與 stocks 只放節目明確談到的個股，沒有就給空陣列。"""
 
 HASHTAGS = "#台股 #財經 #投資理財 #股市 #盤勢"
 
@@ -114,6 +150,135 @@ def demote_headings(article: str) -> str:
     return re.sub(r"^# (?=\S)", "## ", article, flags=re.MULTILINE)
 
 
+# 文中的「公司名（代號）」寫法。代號含台股四碼、上櫃五碼與 ETF 的英數尾碼。
+_SYMBOL_RE = re.compile(r"([一-鿿][一-鿿A-Za-z0-9\-]{1,9})[（(]\s*(\d{4,6}[A-Za-z]?)\s*[）)]")
+
+
+def load_ticker_maps() -> tuple[dict[str, str], dict[str, str]]:
+    """回傳 (名稱→代號, 代號→名稱)。別名也算名稱。"""
+    by_name: dict[str, str] = {}
+    by_symbol: dict[str, str] = {}
+    with connect() as conn:
+        rows = conn.execute("SELECT symbol, name_zh, aliases FROM tickers").fetchall()
+    for r in rows:
+        by_symbol[r["symbol"]] = r["name_zh"]
+        by_name.setdefault(r["name_zh"], r["symbol"])
+        try:
+            for alias in json.loads(r["aliases"] or "[]"):
+                by_name.setdefault(alias, r["symbol"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return by_name, by_symbol
+
+
+# 名稱與代號正式名稱的相似度門檻。「台積」對「台積電」是 100（部分比對），
+# 「長農航」對「光寶科」是 0 —— 中間地帶很少，門檻取多少都不敏感。
+NAME_MATCH_THRESHOLD = 70
+
+
+def _name_matches_symbol(name: str, symbol: str, by_symbol: dict[str, str]) -> bool:
+    """文中名稱是否像該代號的正式名稱。用來放行未收錄的簡稱。"""
+    official = by_symbol.get(symbol)
+    if not official:
+        return False
+    from rapidfuzz import fuzz
+
+    return fuzz.partial_ratio(name, official) >= NAME_MATCH_THRESHOLD
+
+
+def verify_symbols(text: str) -> tuple[str, list[dict]]:
+    """校對文中的股票代號，回傳 (修正後文字, 問題清單)。
+
+    實測 model 會自己編代號：把長榮航寫成「長農航（2301）」（2301 是光寶科）、
+    雷虎寫成「雷虎（2331）」（2331 是精英）。這在財經內容是最貴的一種錯 ——
+    讀者可能照著代號去下單。
+
+    prompt 裡已經寫了「代號與名稱不符時以名稱為準」，但 model 照樣編。
+    跟 demote_headings 同樣的道理：格式與事實問題用程式修是確定的，
+    靠 prompt 是機率的，而這一項錯了的代價遠高於排版。
+
+    三種處置：
+    - 名稱查得到 → 用表裡的代號覆蓋（名稱是人聽得懂的，代號才是會被照抄的）
+    - 名稱查不到，但代號查得到、且該代號的正式名稱與文中名稱夠像 → 代號留著。
+      這是「台積」對「台積電」這種未收錄的簡稱，不是錯。
+    - 其餘一律把括號拿掉，只留名稱。少一個代號不會害到人，錯一個會。
+    """
+    by_name, by_symbol = load_ticker_maps()
+    issues: list[dict] = []
+
+    def _sub(m: re.Match) -> str:
+        name, symbol = m.group(1), m.group(2)
+        correct = by_name.get(name)
+        if correct:
+            if correct != symbol:
+                issues.append(
+                    {"name": name, "given": symbol, "action": "corrected", "symbol": correct}
+                )
+            return f"{name}（{correct}）"
+        if _name_matches_symbol(name, symbol, by_symbol):
+            issues.append(
+                {"name": name, "given": symbol, "action": "name_unknown", "symbol": symbol}
+            )
+            return m.group(0)
+        issues.append({"name": name, "given": symbol, "action": "dropped", "symbol": None})
+        return name
+
+    return _SYMBOL_RE.sub(_sub, text), issues
+
+
+# hashtag 只吃到 15 個非空白字元為止。中文句子沒有空白，用 \S+ 會讓一個 #
+# 把後面整段文案吃光 —— 實測就發生過整篇 IG 文案被清成空字串。
+# 真正的標籤不會超過十幾個字，超過的那是句子不是標籤。
+_HASHTAG_RE = re.compile(r"#[^\s#]{1,15}")
+
+
+def strip_hashtags(caption: str) -> str:
+    """去掉 model 自己加的 hashtag。
+
+    prompt 交代結尾不要加，實測照樣加，程式再補一份就變成兩串重複的標籤。
+    """
+    return _HASHTAG_RE.sub("", caption).strip()
+
+
+def _line(text: object) -> str:
+    """把值壓成單行：條列項目跨行會被解析成新的段落。"""
+    return " ".join(str(text or "").split())
+
+
+def _stock_table(data: dict) -> list[str]:
+    """個股速覽：逐檔列出節目看法與提到的價位／操作條件。
+
+    正文的「個股觀察」已經逐檔寫過一遍，這段不是重複而是索引 —— 讀者想快速掃
+    「哪幾檔、條件是什麼」時不必回頭讀整篇。
+
+    刻意用條列而不是 Markdown 表格：IG 圖卡渲染器與審核台的 Markdown 解析器
+    都只認標題／段落／清單，表格會變成一行行管線符號。Vocus/Medium 吃得下表格，
+    但為了那兩個平台犧牲另外兩處的可讀性不划算。
+
+    stocks 是後來才加的欄位，舊版摘要沒有；退回只列出 tickers 的名稱，
+    不要讓舊資料重跑時整段消失。
+    """
+    stocks = data.get("stocks") or []
+    if stocks:
+        rows = []
+        for s in stocks:
+            name = _line(s.get("name"))
+            symbol = _line(s.get("symbol"))
+            label = f"{name}（{symbol}）" if symbol else name
+            detail = _line(s.get("view"))
+            action = _line(s.get("action"))
+            if action:
+                detail = f"{detail} 操作條件：{action}" if detail else f"操作條件：{action}"
+            rows.append(f"- **{label}**：{detail}")
+        return ["## 個股速覽", "", *rows, ""]
+
+    tickers = data.get("tickers") or []
+    if tickers:
+        names = "、".join(f"{t.get('name', '')}（{t.get('symbol', '')}）" for t in tickers)
+        return [f"**影片提到的個股**：{names}", ""]
+    return []
+
+
 def build_markdown(data: dict, video_id: str, title: str) -> str:
     """組出完整的 Markdown 草稿：標題 + 正文 + 來源 + 免責聲明。
 
@@ -123,12 +288,7 @@ def build_markdown(data: dict, video_id: str, title: str) -> str:
     url = f"https://www.youtube.com/watch?v={video_id}"
     parts = [f"# {title}", "", demote_headings(data.get("article", "").strip()), ""]
 
-    tickers = data.get("tickers") or []
-    if tickers:
-        names = "、".join(
-            f"{t.get('name', '')}（{t.get('symbol', '')}）" for t in tickers
-        )
-        parts += [f"**影片提到的個股**：{names}", ""]
+    parts += _stock_table(data)
 
     parts += [
         "---",
@@ -142,8 +302,36 @@ def build_markdown(data: dict, video_id: str, title: str) -> str:
 
 
 def build_ig_caption(data: dict) -> str:
-    caption = data.get("ig_caption", "").strip()
+    caption = strip_hashtags(data.get("ig_caption", "").strip())
     return f"{caption}\n\n{DISCLAIMER}\n\n{HASHTAGS}"
+
+
+def verify_stock_list(data: dict) -> list[dict]:
+    """校對 stocks / tickers 兩個陣列裡的代號，沿用 verify_symbols 的規則。
+
+    正文走 regex、結構化欄位走這裡，兩條路都要擋 —— 個股速覽是最容易被直接
+    複製去下單的一段。
+    """
+    by_name, by_symbol = load_ticker_maps()
+    issues: list[dict] = []
+    for key in ("stocks", "tickers"):
+        for item in data.get(key) or []:
+            name, symbol = (item.get("name") or "").strip(), (item.get("symbol") or "").strip()
+            correct = by_name.get(name)
+            if correct:
+                if correct != symbol:
+                    issues.append(
+                        {"name": name, "given": symbol, "action": "corrected", "symbol": correct}
+                    )
+                item["symbol"] = correct
+            elif _name_matches_symbol(name, symbol, by_symbol):
+                issues.append(
+                    {"name": name, "given": symbol, "action": "name_unknown", "symbol": symbol}
+                )
+            else:
+                issues.append({"name": name, "given": symbol, "action": "dropped", "symbol": None})
+                item["symbol"] = ""
+    return issues
 
 
 def next_version(video_id: str) -> int:
@@ -182,13 +370,24 @@ def summarize(video_id: str, drafts_dir: Path | None = None) -> dict:
     from app.config import settings
 
     transcript = load_transcript(video_id)
-    raw = llm.complete(SYSTEM_PROMPT, transcript)
-    data = llm._extract_json(raw)
+    data = llm.complete_json(SYSTEM_PROMPT, transcript, max_tokens=MAX_OUTPUT_TOKENS)
 
     title = (data.get("title") or "").strip() or f"影片重點整理 {video_id}"
     article = data.get("article") or ""
     if not article.strip():
         raise RuntimeError("model returned an empty article")
+    # IG 文案空白同樣是壞產出。實測 model 會回空字串，而下游只是把免責聲明與
+    # hashtag 接上去，看起來像一則「正常但沒內容」的貼文，一路混到發布才被發現。
+    if not strip_hashtags((data.get("ig_caption") or "").strip()):
+        raise RuntimeError("model returned an empty ig_caption")
+
+    # 代號校對放在逐字重疊檢查之前：改動的是括號裡的數字，不影響重疊判定，
+    # 但要確保寫進 DB 的已經是校對過的版本。
+    article, issues = verify_symbols(article)
+    data["article"] = article
+    caption_text, caption_issues = verify_symbols(data.get("ig_caption") or "")
+    data["ig_caption"] = caption_text
+    issues += caption_issues + verify_stock_list(data)
 
     # 檢查兩份產出：IG 文案同樣會對外發布，漏檢等於留一個後門
     for label, text in (("article", article), ("ig_caption", data.get("ig_caption") or "")):
@@ -214,6 +413,10 @@ def summarize(video_id: str, drafts_dir: Path | None = None) -> dict:
         "title": title,
         "points": len(data.get("points") or []),
         "tickers": len(data.get("tickers") or []),
+        "stocks": len(data.get("stocks") or []),
+        # 代號校對結果留在回傳裡：人工審核時要知道 model 編了哪些代號，
+        # 也能反過來看出這個 model 值不值得繼續用。
+        "symbol_issues": issues,
         "content_chars": len(content),
         "ig_caption_chars": len(ig_caption),
         "draft": str(draft_path),
