@@ -40,10 +40,11 @@ SYSTEM_PROMPT = """你是台股財經逐字稿的校對助理。
 - 候選清單只是模糊比對結果，可能全部都是錯的。
 
 輸出格式：只輸出 JSON 物件，不要有任何其他文字或 markdown 標記。
-{"results": [{"index": 項目編號, "replace": true/false, "symbol": "代號或null", "name": "股票名稱或null", "confidence": 0.0到1.0, "reason": "簡短理由"}]}
+{"results": [{"index": 項目編號, "term": "原可疑詞", "replace": true/false, "symbol": "代號或null", "name": "股票名稱或null", "confidence": 0.0到1.0, "reason": "簡短理由"}]}
 
 reason 必須簡短（20 字內）且不可包含雙引號或換行。
-每個項目都要有對應的結果，index 要跟輸入的編號一致。"""
+每個項目都要有對應的結果，index 要跟輸入的編號一致，term 要原封不動照抄輸入的可疑詞。
+即使某項你無法判斷，也要輸出該項並填 replace=false，不可跳過不編號。"""
 
 
 class LLMError(RuntimeError):
@@ -138,11 +139,13 @@ def _post(messages: list[dict], attempts: int = 3) -> str:
     raise last  # type: ignore[misc]
 
 
-def judge_batch(items: list[dict]) -> dict[int, dict]:
+def judge_batch(items: list[dict], system_prompt: str | None = None) -> dict[int, dict]:
     """批次判斷。
 
     items 每筆需有 sentence / suspect / candidates。
     回傳 {輸入索引: 判斷結果}；model 漏掉的項目不會出現在結果中。
+
+    system_prompt 可覆寫，供 eval_prompt.py 做 A/B 比較用。
     """
     blocks = []
     for i, item in enumerate(items):
@@ -160,7 +163,7 @@ def judge_batch(items: list[dict]) -> dict[int, dict]:
 
     content = _post(
         [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
             {"role": "user", "content": "\n\n".join(blocks)},
         ]
     )
@@ -172,7 +175,19 @@ def judge_batch(items: list[dict]) -> dict[int, dict]:
     out: dict[int, dict] = {}
     for r in results:
         try:
-            out[int(r["index"])] = r
+            idx = int(r["index"])
         except (KeyError, TypeError, ValueError):
             continue
+        if not 0 <= idx < len(items):
+            continue
+        # 核對回傳的 term 與該 index 的可疑詞是否相符。
+        #
+        # 實測 model 會漏掉一筆之後把後續項目重新編號，造成整批位移一格：
+        # 「電量」拿到「飛鴻」的判斷、「驚訝」拿到「高就」的判斷。這種錯誤
+        # 不會拋例外、結果看起來完全正常，但套回逐字稿就是把字改到別的位置。
+        # 只信 index 無法察覺，所以要求 model 回傳原詞當校驗碼。
+        term = r.get("term")
+        if term is not None and term != items[idx]["suspect"]:
+            continue
+        out[idx] = r
     return out
