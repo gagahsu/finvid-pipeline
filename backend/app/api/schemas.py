@@ -83,3 +83,48 @@ class TranscriptDetail(BaseModel):
 
 class ReviewRequest(BaseModel):
     action: ReviewAction
+
+
+# --- 摘要 -----------------------------------------------------------------
+
+
+class SummaryVersion(BaseModel):
+    """摘要版本清單的一列。
+
+    只帶「挑版本」需要的資訊，正文與 IG 文案要另外抓單一版本才會回傳：
+    一支影片重跑幾次就有幾個版本，每個版本的 content 動輒數千字，
+    全部塞進清單會讓選單頁面白等。字數改用 *_chars 先給個規模感。
+    """
+
+    id: int
+    video_id: str
+    version: int
+    title: str | None = None
+    model: str | None = None
+    created_at: str | None = None
+    content_chars: int = 0
+    ig_caption_chars: int = 0
+    # 這個版本是不是人工在審核台編輯後存下來的（依 model 欄位判斷）
+    human_edited: bool = False
+
+
+class SummaryDetail(SummaryVersion):
+    """單一版本的完整內容。"""
+
+    content: str
+    ig_caption: str | None = None
+    # 與逐字稿的逐字重疊片段（沒有就是 None）。人工存檔時不擋，只回報，
+    # 理由見 app/api/summaries.py 的模組註解。
+    verbatim_overlap: str | None = None
+
+
+class SummaryEditRequest(BaseModel):
+    """人工編輯後的存檔內容。
+
+    依 db.py 的 summaries 註解，人工改完是「新增一個 version」而非覆寫，
+    所以這裡不需要帶 version —— 由後端取目前最大值 + 1。
+    """
+
+    title: str | None = None
+    content: str = Field(min_length=1)
+    ig_caption: str | None = None
