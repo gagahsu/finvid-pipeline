@@ -1,3 +1,32 @@
 :host {
   display: block;
 }
+
+// 全域導覽只放「進不去就到不了」的頁面：訂閱來源沒有任何列表會連過去。
+// 影片相關的頁面（review / summary / publish / pipeline）都從影片總覽點進去，
+// 不重複放在這裡，免得導覽列變成第二份路由表。
+.app-nav {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid #e2e5ea;
+  background: #fff;
+
+  a {
+    padding: 0.35rem 0.75rem;
+    border-radius: 4px;
+    color: #4a5162;
+    font-size: 0.9rem;
+    text-decoration: none;
+
+    &:hover {
+      background: #f1f3f6;
+    }
+
+    &.active {
+      background: #eef2ff;
+      color: #2f45c5;
+      font-weight: 600;
+    }
+  }
+}

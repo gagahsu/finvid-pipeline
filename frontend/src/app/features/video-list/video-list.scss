@@ -1,12 +1,12 @@
 :host {
   display: block;
-  max-width: 1100px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 1.5rem;
 }
 
 .page-head {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 
   h1 {
     margin: 0 0 0.25rem;
@@ -20,26 +20,136 @@
   font-size: 0.85rem;
 }
 
+.add-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1 1 24rem;
+
+    span {
+      font-size: 0.75rem;
+      color: var(--fg-muted);
+    }
+
+    input {
+      padding: 0.35rem 0.5rem;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 0.88rem;
+    }
+  }
+
+  button {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 0.82rem;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    &.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    &.run {
+      border-color: var(--ok-fg);
+      color: var(--ok-fg);
+      font-weight: 600;
+    }
+
+    &.ghost {
+      color: var(--fg-muted);
+    }
+  }
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  border: 1px solid transparent;
+  white-space: pre-wrap;
+
+  button {
+    margin-left: auto;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid currentcolor;
+    background: transparent;
+    color: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+
+  &.error {
+    background: var(--danger-bg);
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  &.ok {
+    background: var(--ins-bg);
+    border-color: var(--ok-fg);
+    color: var(--ok-fg);
+  }
+}
+
 .state {
   padding: 1rem;
   color: var(--fg-muted);
+}
 
-  &.error {
-    color: var(--danger);
-  }
+.summary-line {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+
+.active-count {
+  color: var(--accent);
+}
+
+.failed-count {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.sep {
+  margin: 0 0.35rem;
+  color: var(--border);
 }
 
 table.videos {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
 
   th,
   td {
     padding: 0.5rem 0.6rem;
     border-bottom: 1px solid var(--border);
     text-align: left;
-    vertical-align: middle;
+    vertical-align: top;
   }
 
   th {
@@ -48,13 +158,16 @@ table.videos {
     white-space: nowrap;
   }
 
-  .num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-
   tbody tr:hover {
     background: var(--bg-subtle);
+  }
+
+  tbody tr.row-failed {
+    background: var(--danger-bg);
+
+    &:hover {
+      background: var(--del-bg);
+    }
   }
 }
 
@@ -62,13 +175,156 @@ table.videos {
   font-weight: 600;
 }
 
+.sub {
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+}
+
 .vid {
-  margin-left: 0.5rem;
   color: var(--fg-muted);
   font-family: var(--mono);
-  font-size: 0.75rem;
 }
 
 .muted {
   color: var(--fg-muted);
+}
+
+/* 狀態色：主線推進中用藍、等人用琥珀、完成用綠、FAILED 一定要跳出來 */
+.status {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.status-PENDING {
+    color: var(--fg-muted);
+  }
+
+  &.status-DOWNLOADING,
+  &.status-TRANSCRIBING,
+  &.status-CORRECTING,
+  &.status-SUMMARIZING,
+  &.status-RENDERING,
+  &.status-PUBLISHING {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  &.status-REVIEW {
+    background: var(--pending-bg);
+    border-color: var(--warn-fg);
+    color: var(--warn-fg);
+  }
+
+  &.status-PUBLISHED {
+    background: var(--ins-bg);
+    border-color: var(--ok-fg);
+    color: var(--ok-fg);
+  }
+
+  &.status-FAILED {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+  }
+}
+
+.queue {
+  font-size: 0.75rem;
+  font-weight: 600;
+
+  &.queue-running {
+    color: var(--accent);
+  }
+
+  &.queue-queued {
+    color: var(--warn-fg);
+  }
+}
+
+.job-cell {
+  max-width: 24rem;
+}
+
+.job-status {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+
+  &.job-success {
+    color: var(--ok-fg);
+  }
+
+  &.job-failed,
+  &.job-error {
+    color: var(--danger);
+    font-weight: 700;
+  }
+
+  &.job-running {
+    color: var(--accent);
+  }
+}
+
+.job-stage {
+  margin-left: 0.35rem;
+}
+
+.retry {
+  margin-left: 0.35rem;
+  color: var(--warn-fg);
+  font-size: 0.72rem;
+}
+
+.job-error {
+  margin-top: 0.2rem;
+  padding: 0.2rem 0.35rem;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  /* 清單頁只給前幾行，完整內容在 /pipeline/:id（那裡不截斷） */
+  max-height: 3.6rem;
+  overflow: hidden;
+}
+
+.detail-link {
+  display: inline-block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+}
+
+.actions {
+  white-space: nowrap;
+
+  button.run {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--ok-fg);
+    background: var(--bg);
+    color: var(--ok-fg);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  .act {
+    display: inline-block;
+    margin-left: 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  .cards {
+    margin-left: 0.2rem;
+    color: var(--fg-muted);
+    font-size: 0.68rem;
+  }
 }

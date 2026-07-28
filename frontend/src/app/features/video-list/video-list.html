@@ -1,54 +1,160 @@
 <header class="page-head">
-  <h1>逐字稿審核</h1>
+  <h1>影片總覽</h1>
   <p class="hint">
-    校正模組的建議準確率還不足以全自動化，發布前每一筆修正都要人看過。
+    列出 videos 表的全部影片，含還沒轉錄的。校正建議的準確率還不足以全自動化，
+    發布前每一筆修正都要人看過。
   </p>
 </header>
 
+<section class="add-form">
+  <label class="field">
+    <span>新增影片</span>
+    <input
+      type="text"
+      placeholder="貼上 YouTube 網址或 video_id"
+      [value]="target()"
+      [disabled]="submitting()"
+      (input)="onTargetInput($event)"
+      (keydown.enter)="register()"
+    />
+  </label>
+  <button type="button" class="primary" [disabled]="submitting()" (click)="register()">
+    {{ submitting() ? '登記中…' : '登記' }}
+  </button>
+  @if (justAdded(); as id) {
+    <button
+      type="button"
+      class="run"
+      [disabled]="busyId() === id"
+      (click)="run(id)"
+    >
+      {{ busyId() === id ? '排入中…' : '開始跑 ' + id }}
+    </button>
+  }
+  <button type="button" class="ghost" [disabled]="loading()" (click)="load()">重新整理</button>
+</section>
+
+@if (error(); as e) {
+  <p class="banner error">
+    {{ e }}
+    <button type="button" (click)="dismissError()">關閉</button>
+  </p>
+}
+
+@if (notice(); as n) {
+  <p class="banner ok">
+    {{ n }}
+    <button type="button" (click)="dismissNotice()">關閉</button>
+  </p>
+}
+
 @if (loading()) {
   <p class="state">載入中…</p>
-} @else if (error()) {
-  <p class="state error">{{ error() }}</p>
 } @else if (videos().length === 0) {
-  <p class="state">還沒有任何逐字稿。先跑 pipeline 產出資料。</p>
+  <p class="state">還沒有任何影片。用上面的表單貼一支 YouTube 網址開始。</p>
 } @else {
+  <p class="summary-line">
+    共 {{ videos().length }} 支影片
+    @if (activeCount() > 0) {
+      <span class="sep">·</span>
+      <span class="active-count">{{ activeCount() }} 支排隊／執行中</span>
+    }
+    @if (failedCount() > 0) {
+      <span class="sep">·</span>
+      <span class="failed-count">{{ failedCount() }} 支失敗</span>
+    }
+  </p>
+
   <table class="videos">
     <thead>
       <tr>
         <th>影片</th>
-        <th class="num">segments</th>
-        <th class="num">待審</th>
-        <th class="num" title="上次 pipeline 產生 corrected_text 時實際套用的筆數">
-          上次套用
-        </th>
-        <th class="num">LLM 排除</th>
-        <th class="num">總建議</th>
+        <th>狀態</th>
+        <th>佇列</th>
+        <th>最近一次 job</th>
         <th>更新時間</th>
+        <th>操作</th>
       </tr>
     </thead>
     <tbody>
       @for (v of videos(); track v.video_id) {
-        <tr>
+        <tr [class.row-failed]="v.status === 'FAILED'">
           <td>
-            <a [routerLink]="['/review', v.video_id]" class="video-link">
+            <a [routerLink]="['/pipeline', v.video_id]" class="video-link">
               {{ v.title || v.video_id }}
             </a>
-            @if (v.title) {
+            <div class="sub">
               <span class="vid">{{ v.video_id }}</span>
-            }
+              @if (v.source_name) {
+                <span class="sep">·</span>
+                <span class="muted">{{ v.source_name }}</span>
+              }
+              @if (v.published_at) {
+                <span class="sep">·</span>
+                <span class="muted">{{ v.published_at }}</span>
+              }
+            </div>
           </td>
-          <td class="num">{{ v.segment_count }}</td>
-          <td class="num">
-            @if (v.pending_count > 0) {
-              <span class="badge pending">{{ v.pending_count }}</span>
+
+          <td>
+            <span class="status" [class]="'status-' + v.status">
+              {{ statusLabel(v.status) }}
+            </span>
+          </td>
+
+          <td>
+            @if (v.queue_state === 'idle') {
+              <span class="muted">—</span>
             } @else {
-              <span class="badge done">0</span>
+              <span class="queue" [class]="'queue-' + v.queue_state">
+                {{ queueLabel(v.queue_state) }}
+              </span>
             }
           </td>
-          <td class="num">{{ v.applied_count }}</td>
-          <td class="num muted">{{ v.rejected_count }}</td>
-          <td class="num muted">{{ v.total_corrections }}</td>
+
+          <td class="job-cell">
+            @if (v.latest_job; as j) {
+              <span class="job-status" [class]="'job-' + j.status">{{ j.status }}</span>
+              <span class="job-stage">{{ stageLabel(j.stage) }}</span>
+              @if (j.retry_count > 0) {
+                <span class="retry">重試 {{ j.retry_count }} 次</span>
+              }
+              @if (j.error_detail) {
+                <div class="job-error" [title]="j.error_detail">{{ j.error_detail }}</div>
+                <a [routerLink]="['/pipeline', v.video_id]" class="detail-link">看完整原因 →</a>
+              }
+            } @else {
+              <span class="muted">尚未執行</span>
+            }
+          </td>
+
           <td class="muted">{{ v.updated_at }}</td>
+
+          <td class="actions">
+            <button
+              type="button"
+              class="run"
+              [disabled]="busyId() === v.video_id || v.queue_state !== 'idle'"
+              (click)="run(v.video_id)"
+            >
+              {{ busyId() === v.video_id ? '排入中…' : '開始跑' }}
+            </button>
+            <a [routerLink]="['/pipeline', v.video_id]" class="act">進度</a>
+            @if (v.has_transcript) {
+              <a [routerLink]="['/review', v.video_id]" class="act">逐字稿</a>
+            }
+            @if (v.has_summary) {
+              <a [routerLink]="['/summary', v.video_id]" class="act">摘要</a>
+            }
+            @if (canPublish(v)) {
+              <a [routerLink]="['/publish', v.video_id]" class="act">
+                發布
+                @if (v.card_count > 0) {
+                  <span class="cards">{{ v.card_count }} 張圖卡</span>
+                }
+              </a>
+            }
+          </td>
         </tr>
       }
     </tbody>

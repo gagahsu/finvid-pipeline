@@ -1,0 +1,194 @@
+<header class="head">
+  <div class="head-main">
+    <a routerLink="/" class="back">← 影片清單</a>
+    <h1>訂閱來源管理</h1>
+    <span class="count">
+      {{ sources().length }} 個來源 · {{ activeCount() }} 個啟用中
+    </span>
+  </div>
+
+  <div class="head-tools">
+    <label class="inline-field">
+      <span>歷史筆數</span>
+      <input
+        type="number"
+        min="1"
+        max="500"
+        [value]="backfillLimitText()"
+        (input)="onLimitInput($event)"
+        aria-label="backfill 拉取上限"
+      />
+    </label>
+    <button type="button" (click)="reload()" [disabled]="loading() || anyPolling()">
+      重新整理
+    </button>
+    <button
+      type="button"
+      class="primary"
+      (click)="pollAll()"
+      [disabled]="anyPolling() || loading() || activeCount() === 0"
+    >
+      {{ pollingAll() ? '全部輪詢中…（' + elapsed() + ' 秒）' : '輪詢全部來源' }}
+    </button>
+  </div>
+</header>
+
+<!--
+  輪詢慢是 YouTube feeds server 的問題（間歇 404/500，後端最多重試 10 次），
+  不先講清楚，使用者會以為畫面當掉而狂點重按。
+-->
+<p class="hint">
+  輪詢會連到 YouTube 的 RSS feeds server，那台機器會間歇性回 404／500，後端最多重試
+  10 次，<strong>單一來源最壞要等將近一分鐘</strong>，全部輪詢更久。這是已知的環境行為，
+  不是當機，請耐心等結果出來，不要重複點擊。
+</p>
+
+@if (anyPolling()) {
+  <p class="banner running" role="status" aria-live="polite">
+    <span class="spinner" aria-hidden="true"></span>
+    正在輪詢，已經等了 {{ elapsed() }} 秒⋯⋯最久可能要 40 秒以上，請不要關掉頁面。
+  </p>
+}
+
+@if (error(); as e) {
+  <p class="banner error">
+    {{ e }}
+    <button type="button" (click)="dismissError()">關閉</button>
+  </p>
+}
+
+@if (notice(); as n) {
+  <p class="banner ok">
+    {{ n }}
+    <button type="button" (click)="dismissNotice()">關閉</button>
+  </p>
+}
+
+<section class="add">
+  <h2>新增來源</h2>
+  <div class="add-row">
+    <label class="field grow">
+      <span>來源</span>
+      <input
+        type="text"
+        placeholder="UC… / PL… / https://www.youtube.com/@handle"
+        [value]="newTarget()"
+        (input)="onTargetInput($event)"
+      />
+    </label>
+    <label class="field">
+      <span>類型</span>
+      <select [value]="newType()" (change)="onTypeChange($event)">
+        <option value="channel">頻道</option>
+        <option value="playlist">播放清單</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>顯示名稱（可留空）</span>
+      <input type="text" [value]="newName()" (input)="onNameInput($event)" />
+    </label>
+    <button type="button" class="primary" (click)="create()" [disabled]="creating()">
+      {{ creating() ? '解析中…' : '新增' }}
+    </button>
+  </div>
+  <p class="sub">
+    貼網址或 @handle 時後端會用 yt-dlp 解析出 channel_id，需要幾秒；解析不出來會回 400。
+  </p>
+</section>
+
+@if (loading()) {
+  <p class="state">載入中…</p>
+} @else if (sources().length === 0) {
+  <p class="state">還沒有任何訂閱來源。用上面的表單加入第一個頻道。</p>
+} @else {
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>名稱</th>
+        <th>channel_id</th>
+        <th>類型</th>
+        <th>狀態</th>
+        <th class="num">影片數</th>
+        <th>最新影片</th>
+        <th>動作</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (s of sources(); track s.id) {
+        <tr [class.off]="!s.active">
+          <td class="name">
+            {{ s.name || '（未命名）' }}
+            <a class="feed" [href]="s.feed_url" target="_blank" rel="noopener noreferrer">
+              feed
+            </a>
+          </td>
+          <td class="mono">{{ s.channel_id }}</td>
+          <td>{{ typeLabel(s.type) }}</td>
+          <td>
+            <span class="pill" [class.on]="s.active">{{ s.active ? '啟用' : '停用' }}</span>
+          </td>
+          <td class="num">{{ s.video_count }}</td>
+          <td class="mono small">{{ s.latest_video_published_at || '—' }}</td>
+          <td class="actions">
+            @if (busyLabel(s.id); as label) {
+              <span class="busy">{{ label }}…（{{ elapsed() }} 秒）</span>
+            } @else {
+              <button
+                type="button"
+                (click)="poll(s)"
+                [disabled]="anyPolling()"
+                title="只輪詢這一個來源，最壞要等將近一分鐘"
+              >
+                輪詢
+              </button>
+              <button
+                type="button"
+                (click)="backfill(s)"
+                [disabled]="anyPolling()"
+                [title]="'用 yt-dlp 拉最近 ' + backfillLimit() + ' 支歷史影片'"
+              >
+                拉歷史
+              </button>
+              <button type="button" (click)="rename(s)" [disabled]="anyPolling()">改名</button>
+              <button type="button" (click)="toggleActive(s)" [disabled]="anyPolling()">
+                {{ s.active ? '停用' : '啟用' }}
+              </button>
+              <button
+                type="button"
+                class="danger"
+                (click)="remove(s)"
+                [disabled]="anyPolling()"
+              >
+                刪除
+              </button>
+            }
+          </td>
+        </tr>
+
+        @if (resultOf(s); as r) {
+          <tr class="result-row" [class.off]="!s.active">
+            <td colspan="7">
+              @if (r.error) {
+                <span class="res bad">輪詢失敗：{{ r.error }}</span>
+              } @else {
+                <span class="res good">
+                  讀到 {{ r.total }} 筆，新增 {{ r.new_ids.length }} 支
+                  @if (r.new_ids.length) {
+                    ：
+                    @for (id of r.new_ids; track id) {
+                      <a
+                        class="vid"
+                        [routerLink]="['/publish', id]"
+                        [title]="'到 ' + id + ' 的發布頁'"
+                      >{{ id }}</a>
+                    }
+                  }
+                </span>
+              }
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+}

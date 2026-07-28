@@ -1,0 +1,240 @@
+<header class="head">
+  <div class="head-main">
+    <a routerLink="/" class="back">← 影片總覽</a>
+    <h1>{{ detail()?.title || videoId() }}</h1>
+    <span class="vid">{{ videoId() }}</span>
+    @if (detail(); as d) {
+      <span class="status" [class]="'status-' + d.status">{{ statusLabel(d.status) }}</span>
+    }
+    <button type="button" class="ghost" (click)="refresh()">重新整理</button>
+  </div>
+
+  @if (detail(); as d) {
+    <div class="head-links">
+      @if (d.source_name) {
+        <span class="muted">來源：{{ d.source_name }}</span>
+      }
+      @if (d.url) {
+        <a [href]="d.url" target="_blank" rel="noopener noreferrer">YouTube 原片 ↗</a>
+      }
+      @if (d.has_transcript) {
+        <a [routerLink]="['/review', videoId()]">逐字稿審核 →</a>
+      }
+      @if (d.has_summary) {
+        <a [routerLink]="['/summary', videoId()]">摘要審核 →</a>
+      }
+      @if (canPublish()) {
+        <a [routerLink]="['/publish', videoId()]">發布（{{ d.card_count }} 張圖卡）→</a>
+      }
+    </div>
+  }
+</header>
+
+@if (error(); as e) {
+  <p class="banner error">
+    {{ e }}
+    <button type="button" (click)="dismissError()">關閉</button>
+  </p>
+}
+
+@if (notice(); as n) {
+  <p class="banner ok">
+    {{ n }}
+    <button type="button" (click)="dismissNotice()">關閉</button>
+  </p>
+}
+
+@if (loading()) {
+  <p class="state">載入中…</p>
+} @else if (!detail()) {
+  <p class="state">找不到這支影片。回總覽確認 video_id 是否已登記。</p>
+} @else {
+  <section class="queue-bar" [class.live]="active()">
+    <h2>佇列狀態</h2>
+    @if (queue(); as q) {
+      @if (q.running; as r) {
+        <p class="line">
+          執行中：
+          <a [routerLink]="['/pipeline', r.video_id]" class="mono">{{ r.video_id }}</a>
+          <span class="stage">{{ stageLabel(r.stage) }}</span>
+          <span class="muted">起始 {{ r.started_at }}</span>
+          @if (r.video_id === videoId()) {
+            <span class="me">← 就是這一支</span>
+          }
+        </p>
+      } @else {
+        <p class="line muted">目前沒有執行中的工作。</p>
+      }
+
+      <p class="line">
+        排隊中 {{ q.queued.length }} 支
+        @if (queuePosition() >= 0) {
+          <span class="me">（這一支排在第 {{ queuePosition() + 1 }} 位）</span>
+        }
+        @if (q.queued.length) {
+          <span class="mono muted">{{ q.queued.join('、') }}</span>
+        }
+      </p>
+
+      @if (active()) {
+        <p class="polling">執行中，每 4 秒自動更新…</p>
+      }
+
+      @if (q.recent.length) {
+        <details class="recent">
+          <summary>最近完成 {{ q.recent.length }} 筆</summary>
+          <ul>
+            @for (r of q.recent; track $index) {
+              <li [class.failed]="!!r.error_detail">
+                <span class="mono">{{ r.video_id }}</span>
+                <span class="stage">{{ stageLabel(r.stage) }}</span>
+                <span class="job-status" [class]="'job-' + r.status">{{ r.status }}</span>
+                <span class="muted">{{ r.finished_at }}</span>
+                @if (r.error_detail) {
+                  <pre class="err">{{ r.error_detail }}</pre>
+                }
+              </li>
+            }
+          </ul>
+        </details>
+      }
+    } @else {
+      <p class="line muted">拿不到佇列狀態（後端可能還沒啟動）。</p>
+    }
+  </section>
+
+  <section class="stages">
+    <h2>階段進度</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>階段</th>
+          <th>狀態</th>
+          <th class="num">重試</th>
+          <th>開始</th>
+          <th>更新</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of stageRows(); track row.stage) {
+          <tr [class]="'row-' + row.state">
+            <td>
+              <span class="stage-name">{{ row.label }}</span>
+              <span class="stage-key mono">{{ row.stage }}</span>
+            </td>
+            <td>
+              @if (row.job; as j) {
+                <span class="job-status" [class]="'job-' + j.status">{{ j.status }}</span>
+              } @else {
+                <span class="muted">未執行</span>
+              }
+            </td>
+            <td class="num">
+              @if (row.job && row.job.retry_count > 0) {
+                <span class="retry">{{ row.job.retry_count }}</span>
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
+            <td class="muted">{{ row.job?.started_at || '—' }}</td>
+            <td class="muted">{{ row.job?.updated_at || '—' }}</td>
+          </tr>
+
+          @if (row.job?.error_detail; as detailText) {
+            <tr class="error-row">
+              <td colspan="5">
+                <div class="error-head">
+                  <strong>{{ row.label }} 失敗原因</strong>
+                  <button type="button" (click)="copyError(detailText)">複製</button>
+                </div>
+                <pre class="error-detail">{{ detailText }}</pre>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+
+    @if (extraJobs().length) {
+      <h3>其他階段</h3>
+      <ul class="extra">
+        @for (j of extraJobs(); track $index) {
+          <li>
+            <span class="mono">{{ j.stage }}</span>
+            <span class="job-status" [class]="'job-' + j.status">{{ j.status }}</span>
+            <span class="muted">{{ j.updated_at }}</span>
+            @if (j.error_detail) {
+              <pre class="error-detail">{{ j.error_detail }}</pre>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (failedJobs().length === 0) {
+      <p class="muted note">目前沒有帶錯誤訊息的 job。</p>
+    }
+  </section>
+
+  <section class="controls">
+    <h2>操作</h2>
+
+    <div class="control-card">
+      <h3>開始跑</h3>
+      <p class="desc">丟進背景佇列，不等執行完就回應。</p>
+      <div class="control-row">
+        <label class="field">
+          <span>從哪個階段開始</span>
+          <select [value]="fromStage()" (change)="onFromStageChange($event)">
+            <option value="">從目前狀態接續</option>
+            @for (s of stageOptions; track s) {
+              <option [value]="s">{{ stageLabel(s) }}（{{ s }}）</option>
+            }
+          </select>
+        </label>
+
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="skipJudge()"
+            (change)="onSkipJudgeChange($event)"
+          />
+          <span>skip_judge（跳過 LLM 判斷，只用 fuzzy match 的候選）</span>
+        </label>
+
+        <label class="check danger">
+          <input type="checkbox" [checked]="restart()" (change)="onRestartChange($event)" />
+          <span>restart（從頭重跑，會覆寫既有產出）</span>
+        </label>
+
+        <button type="button" class="primary" [disabled]="busy()" (click)="run()">
+          {{ busy() ? '處理中…' : '開始跑' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="control-card">
+      <h3>退回指定狀態重跑</h3>
+      <p class="desc">改 videos.status，本身不會開跑；退回後要再按「開始跑」。</p>
+      <div class="control-row">
+        <label class="field">
+          <span>退回到</span>
+          <select [value]="rerunTarget()" (change)="onRerunTargetChange($event)">
+            @for (s of rerunTargets; track s) {
+              <option [value]="s">{{ statusLabel(s) }}（{{ s }}）</option>
+            }
+          </select>
+        </label>
+        <button type="button" class="warn" [disabled]="busy()" (click)="rerun()">退回重跑</button>
+      </div>
+    </div>
+
+    <div class="control-card">
+      <h3>退回人工審核</h3>
+      <p class="desc">
+        把影片拉回 REVIEW 閘門。產出不會被丟掉，只是重新等人看過才能繼續往發布走。
+      </p>
+      <button type="button" [disabled]="busy()" (click)="backToReview()">退回 REVIEW</button>
+    </div>
+  </section>
+}

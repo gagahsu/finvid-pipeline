@@ -1,0 +1,332 @@
+:host {
+  display: block;
+  padding: 0 1rem 3rem;
+}
+
+.head {
+  padding: 0.75rem 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  h1 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+}
+
+.count {
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+
+  button {
+    padding: 0.25rem 0.7rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 0.8rem;
+    cursor: pointer;
+
+    &.primary:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.inline-field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+
+  input {
+    width: 4.5rem;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--border);
+    font: inherit;
+    font-size: 0.8rem;
+  }
+}
+
+.hint {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-pending);
+  border-left: 3px solid var(--warn-fg);
+  color: var(--warn-fg);
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+.banner {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+
+  &.error {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+
+  &.ok {
+    background: var(--ins-bg);
+    color: var(--ins-fg);
+  }
+
+  &.running {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+  }
+
+  button {
+    margin-left: 0.6rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 0.78rem;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+}
+
+/* 純 CSS 的轉圈，避免為了一個 loading 指示引進任何相依 */
+.spinner {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+.add {
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-faint);
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+  }
+
+  .sub {
+    margin: 0.45rem 0 0;
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+  }
+}
+
+.add-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+
+  button {
+    padding: 0.3rem 0.9rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 0.8rem;
+    cursor: pointer;
+
+    &.primary:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+
+  &.grow {
+    flex: 1;
+    min-width: 18rem;
+  }
+
+  span {
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+  }
+
+  input,
+  select {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 0.85rem;
+  }
+}
+
+.state {
+  padding: 2rem 0;
+  color: var(--fg-muted);
+}
+
+.grid {
+  width: 100%;
+  margin-top: 0.8rem;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+
+  th {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border-faint);
+    vertical-align: middle;
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  tr.off td {
+    color: var(--fg-muted);
+    background: var(--bg-subtle);
+  }
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+
+  &.small {
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+  }
+}
+
+.name {
+  font-weight: 600;
+
+  .feed {
+    margin-left: 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--fg-muted);
+    text-decoration: underline;
+  }
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 0.72rem;
+
+  &.on {
+    border-color: var(--ok-fg);
+    color: var(--ok-fg);
+  }
+}
+
+.actions {
+  white-space: nowrap;
+
+  button {
+    margin-right: 0.25rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 0.75rem;
+    cursor: pointer;
+
+    &.danger:not(:disabled) {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+
+  .busy {
+    color: var(--accent);
+    font-size: 0.76rem;
+  }
+}
+
+.result-row td {
+  padding-top: 0;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.res {
+  font-size: 0.76rem;
+
+  &.good {
+    color: var(--ok-fg);
+  }
+
+  &.bad {
+    color: var(--danger);
+    word-break: break-word;
+  }
+
+  .vid {
+    margin-left: 0.35rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+  }
+}

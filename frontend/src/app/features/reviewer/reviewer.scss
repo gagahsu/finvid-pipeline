@@ -23,6 +23,12 @@
   }
 }
 
+/* 逐字稿與摘要是同一支影片的兩道審核關卡，靠右擺一個互跳的入口 */
+.cross-link {
+  margin-left: auto;
+  font-size: 0.8rem;
+}
+
 .vid {
   color: var(--fg-muted);
   font-family: var(--mono);

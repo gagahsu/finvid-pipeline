@@ -1,0 +1,231 @@
+<header class="head">
+  <div class="head-main">
+    <a routerLink="/" class="back">← 影片清單</a>
+    <h1>圖卡與發布</h1>
+    <span class="vid">{{ videoId() }}</span>
+    <a [routerLink]="['/summary', videoId()]" class="cross-link">摘要審核 →</a>
+  </div>
+</header>
+
+@if (error(); as e) {
+  <p class="banner error">
+    {{ e }}
+    <button type="button" (click)="dismissError()">關閉</button>
+  </p>
+}
+
+@if (notice(); as n) {
+  <p class="banner ok">
+    {{ n }}
+    <button type="button" (click)="dismissNotice()">關閉</button>
+  </p>
+}
+
+<section class="cards-section">
+  <div class="section-head">
+    <h2>IG 圖卡</h2>
+    @if (cardSet(); as set) {
+      <span class="meta">
+        摘要 v{{ set.version }} · summary_id {{ set.summary_id }} · {{ set.cards.length }} 張
+      </span>
+    }
+    <label class="inline-field">
+      <span>版本</span>
+      <input
+        type="number"
+        min="1"
+        placeholder="最新"
+        [value]="versionText()"
+        (input)="onVersionInput($event)"
+        aria-label="摘要版本"
+      />
+    </label>
+    <button type="button" (click)="reloadCards()" [disabled]="cardsLoading() || rendering()">
+      讀取
+    </button>
+    <button type="button" (click)="render(true)" [disabled]="rendering()">
+      {{ rendering() ? '處理中…' : '預覽不存檔' }}
+    </button>
+    <button type="button" class="primary" (click)="render(false)" [disabled]="rendering()">
+      {{ rendering() ? '處理中…' : '重新渲染' }}
+    </button>
+  </div>
+
+  @if (isPreview()) {
+    <p class="warn">
+      這是「預覽不存檔」的結果，圖卡沒有寫進 media_assets，預覽連結約 30 分鐘後失效，
+      也不能拿來發布。滿意的話按「重新渲染」正式存檔。
+    </p>
+  }
+
+  @if (cardsError(); as ce) {
+    <p class="banner error">{{ ce }}</p>
+  }
+
+  @if (cardsLoading()) {
+    <p class="state">載入圖卡中…</p>
+  } @else if (!hasCards()) {
+    <div class="empty">
+      <p>這一版摘要還沒有渲染過圖卡。</p>
+      <button type="button" class="primary" (click)="render(false)" [disabled]="rendering()">
+        {{ rendering() ? '渲染中…' : '立即渲染圖卡' }}
+      </button>
+      <p class="sub">圖卡是 1080×1350 的直式輪播圖，用 Pillow 在本機算，只要幾秒。</p>
+    </div>
+  } @else {
+    <!-- 橫向輪播列：對應 IG 上實際的滑動順序，一眼看得出第一張與收尾張 -->
+    <div class="carousel" role="list">
+      @for (c of cards(); track c.url; let i = $index) {
+        <figure class="card" role="listitem">
+          <button
+            type="button"
+            class="card-btn"
+            (click)="zoom(c)"
+            [title]="'放大看第 ' + (i + 1) + ' 張原圖'"
+          >
+            <img [src]="c.url" [alt]="'圖卡 ' + (i + 1) + '：' + c.type" loading="lazy" />
+          </button>
+          <figcaption>
+            <span class="idx">{{ i + 1 }}</span>
+            <span class="type">{{ c.type }}</span>
+            <span class="dim">{{ c.width }}×{{ c.height }}</span>
+          </figcaption>
+        </figure>
+      }
+    </div>
+  }
+</section>
+
+<section class="posts-section">
+  <div class="section-head">
+    <h2>發布狀態</h2>
+    <button
+      type="button"
+      class="primary"
+      (click)="publishAll()"
+      [disabled]="publishing() !== null || postsLoading()"
+    >
+      全部備妥（三個平台）
+    </button>
+  </div>
+
+  <!--
+    這段不能省。三個平台沒有一個能全自動，介面若寫成「發布」而不解釋，
+    使用者會以為按下去內容就上線了。
+  -->
+  <p class="hint">
+    這個系統的「發布」只做到<strong>把東西備妥</strong>：Vocus／Medium 產出 Markdown 草稿讓你
+    複製貼上，Instagram 則只是確認圖卡渲染好了。真正貼出去的動作一律由人完成，
+    完成後回到這裡填入外部連結並標記已發布。
+  </p>
+
+  @if (postsLoading()) {
+    <p class="state">載入發布狀態中…</p>
+  } @else {
+    @for (pf of platforms; track pf.key) {
+      <article class="platform" [class.blocked]="postOf(pf.key)?.status === 'blocked'">
+        <div class="pf-head">
+          <h3>{{ pf.label }}</h3>
+          <span class="status" [class]="'st-' + (postOf(pf.key)?.status || 'none')">
+            {{ statusLabel(postOf(pf.key)) }}
+          </span>
+          @if (postOf(pf.key)?.updated_at; as u) {
+            <span class="ts">{{ u }}</span>
+          }
+
+          <div class="pf-tools">
+            @if (pf.draftKey; as dk) {
+              <button type="button" (click)="toggleDraft(dk)">
+                {{ draftOpen() === dk ? '收合草稿' : '看草稿' }}
+              </button>
+            }
+            <button
+              type="button"
+              (click)="publish([pf.key])"
+              [disabled]="publishing() !== null"
+            >
+              {{ busyFor(pf.key) ? '處理中…' : '備妥此平台' }}
+            </button>
+          </div>
+        </div>
+
+        <p class="pf-note">{{ pf.note }}</p>
+
+        @if (postOf(pf.key)?.error; as err) {
+          <p class="pf-error">後端訊息：{{ err }}</p>
+        }
+
+        @if (pf.key === 'instagram') {
+          <p class="pf-note strong">
+            按下去<strong>不會</strong>自動發到 Instagram。要自己把上面的圖卡存下來、
+            連同摘要頁的 IG 文案手動發布，再回來填連結。
+          </p>
+        }
+
+        @if (postOf(pf.key); as post) {
+          <div class="fill">
+            <label class="field grow">
+              <span>外部連結（人工發布後回填）</span>
+              <input
+                type="url"
+                placeholder="https://…"
+                [value]="urlOf(post.id)"
+                (input)="onUrlInput(post.id, $event)"
+              />
+            </label>
+            <button type="button" (click)="saveUrl(post)" [disabled]="publishing() !== null">
+              儲存連結
+            </button>
+            @if (post.status === 'published') {
+              <button
+                type="button"
+                (click)="revertToReady(post)"
+                [disabled]="publishing() !== null"
+              >
+                退回 ready
+              </button>
+              @if (post.external_url; as u) {
+                <a [href]="u" target="_blank" rel="noopener noreferrer" class="ext">開啟</a>
+              }
+            } @else {
+              <button
+                type="button"
+                class="primary"
+                (click)="markPublished(post)"
+                [disabled]="publishing() !== null"
+              >
+                標記已發布
+              </button>
+            }
+          </div>
+          @if (post.published_at; as pa) {
+            <p class="pf-note">發布時間：{{ pa }}</p>
+          }
+        }
+
+        @if (pf.draftKey; as dk) {
+          @if (draftOpen() === dk) {
+            @if (draftOf(dk); as d) {
+              <div class="draft">
+                <div class="draft-head">
+                  <span class="path">{{ d.file_path || '（尚未寫出檔案）' }}</span>
+                  <button type="button" (click)="copyDraft(dk)">複製全文</button>
+                </div>
+                <pre>{{ d.content }}</pre>
+              </div>
+            } @else {
+              <p class="state small">載入草稿中…</p>
+            }
+          }
+        }
+      </article>
+    }
+  }
+</section>
+
+@if (zoomed(); as z) {
+  <div class="lightbox" (click)="closeZoom()">
+    <button type="button" class="close" (click)="closeZoom()" aria-label="關閉">✕</button>
+    <img [src]="z.url" [alt]="'圖卡原圖：' + z.type" />
+  </div>
+}

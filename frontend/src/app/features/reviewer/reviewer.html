@@ -3,6 +3,7 @@
     <a routerLink="/" class="back">← 影片清單</a>
     <h1>{{ transcript()?.title || videoId() }}</h1>
     <span class="vid">{{ videoId() }}</span>
+    <a [routerLink]="['/summary', videoId()]" class="cross-link">摘要審核 →</a>
   </div>
 
   @if (transcript(); as t) {

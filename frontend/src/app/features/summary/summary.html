@@ -1,0 +1,188 @@
+<header class="head">
+  <div class="head-main">
+    <a routerLink="/" class="back">← 影片清單</a>
+    <h1>{{ current()?.title || videoId() }}</h1>
+    <span class="vid">{{ videoId() }}</span>
+    <a [routerLink]="['/review', videoId()]" class="cross-link">逐字稿審核 →</a>
+  </div>
+
+  @if (versions().length) {
+    <div class="versions" role="group" aria-label="摘要版本">
+      <span class="versions-label">版本</span>
+      @for (v of versions(); track v.id) {
+        <button
+          type="button"
+          [class.active]="current()?.id === v.id"
+          [class.human]="v.human_edited"
+          [disabled]="saving()"
+          (click)="select(v.id)"
+          [title]="modelLabel(v) + ' · ' + (v.created_at || '')"
+        >
+          v{{ v.version }}
+          @if (v.human_edited) {
+            <span class="tag">人工</span>
+          }
+        </button>
+      }
+    </div>
+  }
+</header>
+
+@if (error(); as e) {
+  <p class="banner error">
+    {{ e }}
+    <button type="button" (click)="dismissError()">關閉</button>
+  </p>
+}
+
+@if (notice(); as n) {
+  <p class="banner ok">
+    {{ n }}
+    <button type="button" (click)="dismissNotice()">關閉</button>
+  </p>
+}
+
+@if (loading()) {
+  <p class="state">載入中…</p>
+} @else if (!current()) {
+  <p class="state">
+    這支影片還沒有摘要。先跑完 SUMMARIZING 階段（<code>cli summarize</code>）再回來。
+  </p>
+} @else {
+  <div class="toolbar">
+    <div class="meta">
+      <span>來源：{{ modelLabel(current()!) }}</span>
+      <span class="sep">·</span>
+      <span>{{ current()!.created_at }}</span>
+      @if (dirty()) {
+        <span class="sep">·</span>
+        <span class="dirty">有未儲存的修改</span>
+      }
+    </div>
+
+    <div class="tools">
+      <button type="button" (click)="toggleEditing()" [disabled]="saving()">
+        {{ editing() ? '取消編輯' : '編輯' }}
+      </button>
+      <button type="button" class="save" [disabled]="!dirty() || saving()" (click)="save()">
+        {{ saving() ? '儲存中…' : '存成新版本' }}
+      </button>
+    </div>
+  </div>
+
+  @if (current()!.verbatim_overlap; as overlap) {
+    <p class="warn">
+      這一版與逐字稿有 {{ overlap.length }} 字以上的逐字重疊：「{{ overlap }}」。
+      對外只能發布重新整理過的內容，發布前請改寫這一段。
+    </p>
+  }
+
+  <div class="panes">
+    <section class="pane">
+      <div class="pane-head">
+        <h2>文章草稿（Vocus / Medium）</h2>
+        <button type="button" class="copy" (click)="copy(draftContent(), '文章草稿')">
+          複製 Markdown
+        </button>
+      </div>
+
+      @if (editing()) {
+        <label class="field">
+          <span>標題</span>
+          <input type="text" [value]="draftTitle()" (input)="onTitleInput($event)" />
+        </label>
+        <textarea
+          class="editor"
+          rows="24"
+          [value]="draftContent()"
+          (input)="onContentInput($event)"
+          aria-label="文章 Markdown"
+        ></textarea>
+      }
+
+      <article class="preview">
+        @for (b of blocks(); track $index) {
+          @switch (b.kind) {
+            @case ('h1') {
+              <h1>
+                @for (p of b.parts; track $index) {
+                  <span [class]="'in-' + p.kind">{{ p.text }}</span>
+                }
+              </h1>
+            }
+            @case ('h2') {
+              <h2>
+                @for (p of b.parts; track $index) {
+                  <span [class]="'in-' + p.kind">{{ p.text }}</span>
+                }
+              </h2>
+            }
+            @case ('h3') {
+              <h3>
+                @for (p of b.parts; track $index) {
+                  <span [class]="'in-' + p.kind">{{ p.text }}</span>
+                }
+              </h3>
+            }
+            @case ('hr') {
+              <hr />
+            }
+            @case ('quote') {
+              <blockquote>
+                @for (p of b.parts; track $index) {
+                  <span [class]="'in-' + p.kind">{{ p.text }}</span>
+                }
+              </blockquote>
+            }
+            @case ('li') {
+              <p class="li">
+                @for (p of b.parts; track $index) {
+                  <span [class]="'in-' + p.kind">{{ p.text }}</span>
+                }
+              </p>
+            }
+            @default {
+              <p>
+                @for (p of b.parts; track $index) {
+                  @if (p.kind === 'link') {
+                    <a [href]="p.href" target="_blank" rel="noopener noreferrer">{{ p.text }}</a>
+                  } @else {
+                    <span [class]="'in-' + p.kind">{{ p.text }}</span>
+                  }
+                }
+              </p>
+            }
+          }
+        }
+      </article>
+    </section>
+
+    <section class="pane">
+      <div class="pane-head">
+        <h2>IG 文案</h2>
+        <span class="count" [class.over]="igOverLimit()">
+          {{ igText().length }} / {{ igLimit }}
+        </span>
+        <button type="button" class="copy" (click)="copy(draftIgCaption(), 'IG 文案')">
+          複製文案
+        </button>
+      </div>
+
+      @if (igOverLimit()) {
+        <p class="warn">超過 Instagram 的字數上限，這樣送出會被 Graph API 退回。</p>
+      }
+
+      @if (editing()) {
+        <textarea
+          class="editor"
+          rows="20"
+          [value]="draftIgCaption()"
+          (input)="onIgInput($event)"
+          aria-label="IG 文案"
+        ></textarea>
+      } @else {
+        <pre class="ig-preview">{{ igText() || '（這一版沒有 IG 文案）' }}</pre>
+      }
+    </section>
+  </div>
+}

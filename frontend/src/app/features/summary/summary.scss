@@ -1,0 +1,318 @@
+:host {
+  display: block;
+  padding: 0 1rem 3rem;
+}
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.75rem 0 0.5rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  h1 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+}
+
+.vid {
+  color: var(--fg-muted);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.cross-link {
+  margin-left: auto;
+  font-size: 0.8rem;
+}
+
+.versions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+
+  button {
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    cursor: pointer;
+
+    &.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    &.human:not(.active) {
+      border-color: var(--ok-fg);
+      color: var(--ok-fg);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+
+  .tag {
+    margin-left: 0.25rem;
+    font-family: inherit;
+    font-size: 0.68rem;
+  }
+}
+
+.versions-label {
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+.banner {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+
+  &.error {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+
+  &.ok {
+    background: var(--ins-bg);
+    color: var(--ins-fg);
+  }
+
+  button {
+    margin-left: 0.6rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 0.78rem;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+}
+
+.state {
+  padding: 2rem 0;
+  color: var(--fg-muted);
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+  }
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.meta {
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+
+  .sep {
+    margin: 0 0.4rem;
+  }
+
+  .dirty {
+    color: var(--warn-fg);
+  }
+}
+
+.tools button {
+  margin-left: 0.4rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 0.8rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &.save:not(:disabled) {
+    border-color: var(--ok-fg);
+    color: var(--ok-fg);
+  }
+}
+
+.warn {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-pending);
+  border-left: 3px solid var(--warn-fg);
+  color: var(--warn-fg);
+  font-size: 0.78rem;
+}
+
+/* 兩欄並排：文章與 IG 文案的內容差很多，對照著看才知道同一版的兩份產出一不一致 */
+.panes {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pane {
+  min-width: 0;
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg-subtle);
+  border-top: 1px solid var(--border);
+
+  h2 {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+  }
+
+  .count {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+
+    &.over {
+      color: var(--danger);
+      font-weight: 600;
+    }
+  }
+
+  .copy {
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+
+  span {
+    font-size: 0.78rem;
+    color: var(--fg-muted);
+  }
+
+  input {
+    flex: 1;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    font: inherit;
+    font-size: 0.9rem;
+  }
+}
+
+.editor {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.preview {
+  padding: 0.5rem 0.25rem;
+  font-size: 0.92rem;
+  line-height: 1.7;
+
+  h1 {
+    margin: 0.8rem 0 0.4rem;
+    font-size: 1.15rem;
+  }
+
+  h2 {
+    margin: 0.9rem 0 0.35rem;
+    font-size: 1rem;
+  }
+
+  h3 {
+    margin: 0.7rem 0 0.3rem;
+    font-size: 0.92rem;
+  }
+
+  p {
+    margin: 0.45rem 0;
+  }
+
+  p.li {
+    margin: 0.2rem 0 0.2rem 1rem;
+    text-indent: -0.8rem;
+
+    &::before {
+      content: '・';
+      color: var(--fg-muted);
+    }
+  }
+
+  blockquote {
+    margin: 0.6rem 0;
+    padding: 0.35rem 0.6rem;
+    border-left: 3px solid var(--border);
+    color: var(--fg-muted);
+    font-size: 0.85rem;
+  }
+
+  hr {
+    margin: 0.9rem 0;
+    border: 0;
+    border-top: 1px solid var(--border-faint);
+  }
+}
+
+.in-strong {
+  font-weight: 600;
+}
+
+.ig-preview {
+  margin: 0.5rem 0 0;
+  padding: 0.6rem;
+  border: 1px solid var(--border-faint);
+  background: var(--bg-subtle);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
