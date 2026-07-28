@@ -58,6 +58,8 @@ STAGE_STATUS = {
     "correct": CORRECTING,
     "apply": CORRECTING,
     "summarize": SUMMARIZING,
+    # render 不在 CLI 主線上：它在 REVIEW 之後，只能由人在審核台放行後單獨觸發。
+    "render": RENDERING,
 }
 
 

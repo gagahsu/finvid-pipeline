@@ -13,7 +13,16 @@ pypinyin
 jieba
 httpx
 
+# IG 圖卡渲染
+pillow
+
+# YouTube RSS 輪詢（app/rss.py）
+# feed 解析用標準庫 xml.etree，HTTP 沿用上面的 httpx，所以只需要排程器。
+apscheduler
+
+# 只給 app/rss.py 的 backfill 用（--flat-playlist 拉歷史 video_id），走 subprocess 呼叫。
+# 音訊下載不用它，原因見 app/downloader.py 的說明。
+yt-dlp
+
 # 以下尚未使用，是 roadmap 上的階段才會用到，先留著避免日後漏裝：
-# apscheduler  — YouTube RSS 輪詢排程
-# pillow       — IG 圖卡渲染
 # playwright   — HTML 轉截圖（圖卡的另一條路）

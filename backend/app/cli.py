@@ -12,6 +12,10 @@
     python -m app.cli status <video_id>
     python -m app.cli list [--status REVIEW]
     python -m app.cli review <video_id>          # 退回人工審核
+    python -m app.cli render <video_id>          # 審核通過後產 IG 圖卡
+    python -m app.cli add-source <channel_id>    # 訂閱頻道
+    python -m app.cli init-source <channel_id>   # 訂閱 + yt-dlp 拉歷史
+    python -m app.cli poll                       # 抓一輪 RSS 找新影片
     python -m app.cli rerun <video_id> CORRECTING
 
 console 一律只輸出 ASCII：Windows 中文環境的 console 是 cp950，
@@ -115,6 +119,13 @@ def _stage_summarize(video_id: str) -> dict:
     return summarize(video_id)
 
 
+def _stage_render(video_id: str, version: int | None) -> dict:
+    from app.renderer import render
+
+    paths = render(video_id, version)
+    return {"cards": len(paths), "dir": str(paths[0].parent)}
+
+
 def _load_transcript(video_id: str, audio_dir: Path) -> dict:
     path = audio_dir / f"{video_id}.json"
     if not path.exists():
@@ -212,6 +223,67 @@ def cmd_review(args) -> int:
     return 0
 
 
+def cmd_render(args) -> int:
+    """把最新版摘要渲染成 IG 圖卡。
+
+    刻意不併進 run 的 STAGES：RENDERING 在 REVIEW 之後，run 一律停在人工閘門前，
+    圖卡要等人審完摘要才值得產。
+    """
+    from app.renderer import FontNotFound, NoSummary
+
+    try:
+        with pipeline.run_stage(args.video_id, "render"):
+            out = _stage_render(args.video_id, args.version)
+    except (FontNotFound, NoSummary) as exc:
+        # 這兩個錯誤訊息含中文，直接讓它冒到 traceback 會在 cp950 console 再炸一次
+        print(f"{type(exc).__name__}: {_ascii(exc)}", file=sys.stderr)
+        return 1
+    print(f"cards: {out['cards']}")
+    print(f"dir:   {_ascii(out['dir'])}")
+    return 0
+
+
+def cmd_poll(args) -> int:
+    """抓一輪 RSS，把新影片登記進 videos。
+
+    只登記不跑 pipeline：轉錄很吃資源，要跑哪一支由人（或另一個排程）決定。
+    """
+    from app import rss
+
+    report = rss.poll_all(max_new=args.max_new)
+    for r in report.results:
+        label = _ascii(r.name or r.channel_id)
+        if r.ok:
+            print(f"{label}: +{len(r.new_ids)} new / {r.total}")
+        else:
+            print(f"{label}: FAILED {_ascii(r.error)}")
+    print(f"new: {len(report.new_ids)}")
+    # 有來源失敗就回非零，排程器/工作排程器才看得出這輪不完整
+    return 1 if report.failed else 0
+
+
+def cmd_add_source(args) -> int:
+    sid = pipeline.upsert_source(args.channel_id, name=args.name, type_=args.type_)
+    print(f"source id: {sid}")
+    return 0
+
+
+def cmd_init_source(args) -> int:
+    """新訂閱一次做完：登記來源 + yt-dlp 拉歷史清單。
+
+    RSS 只回最新約 15 支（CLAUDE.md），新頻道不 backfill 會漏掉整個歷史。
+    """
+    from app import rss
+
+    sid = pipeline.upsert_source(args.channel_id, name=args.name, type_=args.type_)
+    added = rss.backfill_source(
+        args.channel_id, type_=args.type_, limit=args.limit, source_id=sid
+    )
+    print(f"source id:  {sid}")
+    print(f"backfilled: {len(added)}")
+    return 0
+
+
 def cmd_rerun(args) -> int:
     print(f"status: {pipeline.rerun_from(args.video_id, args.status)}")
     return 0
@@ -246,6 +318,31 @@ def build_parser() -> argparse.ArgumentParser:
     rv = sub.add_parser("review", help="send back to REVIEW")
     rv.add_argument("video_id")
     rv.set_defaults(func=cmd_review)
+
+    rd = sub.add_parser("render", help="render IG cards from a summary")
+    rd.add_argument("video_id")
+    rd.add_argument("--version", type=int, help="summary version (default: latest)")
+    rd.set_defaults(func=cmd_render)
+
+    # RSS 相關。--type / --limit 的預設值向 rss 模組拿，避免兩邊各寫一份。
+    from app import rss
+
+    po = sub.add_parser("poll", help="poll subscribed RSS feeds for new videos")
+    po.add_argument("--max-new", type=int, help="cap new videos registered per source")
+    po.set_defaults(func=cmd_poll)
+
+    ad = sub.add_parser("add-source", help="subscribe to a channel or playlist")
+    ad.add_argument("channel_id")
+    ad.add_argument("--type", dest="type_", choices=list(rss.FEED_PARAM), default="channel")
+    ad.add_argument("--name")
+    ad.set_defaults(func=cmd_add_source)
+
+    it = sub.add_parser("init-source", help="subscribe and backfill history via yt-dlp")
+    it.add_argument("channel_id")
+    it.add_argument("--type", dest="type_", choices=list(rss.FEED_PARAM), default="channel")
+    it.add_argument("--name")
+    it.add_argument("--limit", type=int, default=rss.DEFAULT_BACKFILL_LIMIT)
+    it.set_defaults(func=cmd_init_source)
 
     rr = sub.add_parser("rerun", help="roll back to an earlier status")
     rr.add_argument("video_id")
